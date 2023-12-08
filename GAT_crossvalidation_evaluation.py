@@ -230,7 +230,6 @@ def prepare_cross_validation_dataset(k,random_seed):
         CV_set_data[CV_set] = [X_train,X_test,Y_train,Y_test,edges_train,edges_test,edge_features_train,edge_features_test,ph_domain_names_train,ph_domain_names_test]
     return(CV_set_data)
 
-save_models = True
 model_name_prefix = "GATv2model_2023-06-10_01"
 models_directory = "ph_domain_data/models/"
 number_of_features = 25
