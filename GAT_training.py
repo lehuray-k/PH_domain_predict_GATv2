@@ -231,7 +231,6 @@ for k in [5,10,20]:
         for CV_set in range(0,k):
             # train model for each fold
             model_name = "%s_%sfoldCV_seed%s_fold%s"%(model_name_prefix,str(k),str(random_seed),str(CV_set))
-            CV_set_data[CV_set]
 
             # define model using keras functional API
             node_inputs = tf.keras.Input(shape=(None,number_of_features),batch_size=1)
