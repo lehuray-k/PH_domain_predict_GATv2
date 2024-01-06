@@ -1,4 +1,4 @@
-Welcome to the code base for the manuscript "Rapid Prediction of Lipid Interaction Sites on Pleckstrin Homology Domains Using Graph Neural Networks and Molecular Dynamics Simulations". This repository contains model parameters, a script for making predictions on any PH domain structure as well as scripts for training and cross-validation.
+Welcome to the code base for the manuscript "Rapid Prediction of Lipid Interaction Sites on Pleckstrin Homology Domains Using Graph Neural Networks and Molecular Dynamics Simulations". This repository contains an inferecne script for PH domain pdb structures, model parameters, as well as scripts for training and cross-validation.
 
 Requirements: python 3, tensorflow 2.13.0, keras 2.13, numpy, pandas, mdtraj, scikit-learn and biopython
 
