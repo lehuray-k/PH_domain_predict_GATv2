@@ -24,4 +24,4 @@ INSTRUCTIONS FOR PREPARING PDB FILES FOR PREDICTION
 - The structure should ideally begin 1-2 residues before B1 strand and terminate 1-2 residues after C-terminal alpha helix
 - Avoid leaving LYS/ARG/HIS/GLU/ASP at C or N termini, as the loose charges at the termini may affect prediction
 - Modify 'user defined settings below' to make a list of the location of the pdb files you want to make predictions for
-#-----------------------------------------------------#
+
