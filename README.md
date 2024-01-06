@@ -12,7 +12,6 @@ To make predictions, prepare PDB files following the instructions below, and the
 
 files = ["tutorial_examples/testing_predict_on_structure/1mai_clean.pdb","tutorial_examples/testing_predict_on_structure/5c79_clean.pdb","tutorial_examples/testing_predict_on_structure/7yis_clean.pdb","tutorial_examples/testing_predict_on_structure/1h6h_clean.pdb"] # list of PDB file to make predictions for
 
-
 #-----------------------------------------------------#
 INSTRUCTIONS FOR PREPARING PDB FILES FOR PREDICTION
 - 'Clean' PDB by removing all lines that do not begin with "ATOM"
