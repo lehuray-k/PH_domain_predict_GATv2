@@ -381,6 +381,7 @@ class protein_representation:
             new_file_name = self.pdb_file.replace(".pdb","_GATv2-PIPcontacts-prediction.pdb")
         else:
             new_file_name = alternative_new_file_name
+        print("Writing predicted contacts to file %s"%(new_file_name)
         modify_beta_factor_in_pdb(self.pdb_file,new_file_name,self.prediction.numpy().tolist())
 
 # load model
@@ -397,6 +398,7 @@ for file in files:
         processed_structure.output_prediction_to_new_pdb_file()
 
     if plot_predicted_contacts == True:
+        print("Plotting data in matplotlib")
         fig,ax = plt.subplots()
         plt.suptitle(processed_structure.pdb_file.split("/")[-1],y=0.95,weight='heavy',font='arial')
         ax.plot(processed_structure.prediction,c='#364B9A',label='Prediction',lw=0.7)
