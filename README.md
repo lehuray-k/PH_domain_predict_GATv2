@@ -10,9 +10,17 @@ USAGE
 
 predict_on_structure.py enables users to make predictions on pdb files of PH domains. The predicted normalized frequency of contacts with phosphoinositide headgroups will be printed, plotted using matplotlib and optionally also saved into the betafactor column of a new PDB file, allowing visualization on the structure in programs such as VMD (Visual Molecular Dynamics). Please download the ph_domain_data folder and keep this in the same directory as the predict_on_structure.py script.
 
-To make predictions, we have prepared four tutorial examples found ph_domain_data/tutorial_examples/. predict_on_structure.py is already set up to run inferences on these strutrues and return output in the form of matplotlib graphs and new pdb files saved in the original folder, with the predictions stored in the beta column. To perform predictions on different PH domain structures, simply update the 'files' variable on line 27 of predict_on_structure.py to list the path to the PDB files you wish to make predictions for. Please also follow the instructions below to prepare PDB files for prediction.
+To make predictions, we have prepared four tutorial examples found in ph_domain_data/tutorial_examples/. predict_on_structure.py is already set up to run inferences on these strutrues. The predictions will be printed to the terminal, displayed as a matplotlib graph (optional, enabled by default) and new pdb files will be saved in the original folder, with the predictions stored in the beta column (optional, enabled by default). To perform predictions on different PH domain structures, simply update the 'files' variable on line 27 of predict_on_structure.py to list the path to the PDB files you wish to make predictions for. Please also follow the instructions below to prepare PDB files for prediction.
 
 files = ["tutorial_examples/testing_predict_on_structure/1mai_clean.pdb","tutorial_examples/testing_predict_on_structure/5c79_clean.pdb","tutorial_examples/testing_predict_on_structure/7yis_clean.pdb","tutorial_examples/testing_predict_on_structure/1h6h_clean.pdb"] # list of PDB file to make predictions for
+
+On a linux system, if all dependencies have been installed, the simplest way to run the script is to download the repository from github either manually or using git
+
+git clone https://github.com/lehuray-k/PH_domain_predict_GATv2.git
+
+Then use python (must be python3) to run predictions
+
+python predict_on_structure.py
 
 #-----------------------------------------------------#
 
