@@ -10,7 +10,7 @@ USAGE
 
 predict_on_structure.py enables users to make predictions on pdb files of PH domains. The predicted normalized frequency of contacts with phosphoinositide headgroups will be printed, plotted using matplotlib and optionally also saved into the betafactor column of a new PDB file, allowing visualization on the structure.
 
-To make predictions, prepare PDB files following the instructions below, and then edit the files variable on line 27 of predict_on_structure.py to list the locations of the PDB files you wish to make predictions for. Some example structure files have been already prepared and are available in the 
+To make predictions, prepare PDB files following the instructions below, and then edit the files variable on line 27 of predict_on_structure.py to list the locations of the PDB files you wish to make predictions for. Some example structure files have been already prepared and are available in the folder ph_domain_data/tutorial_examples
 
 files = ["tutorial_examples/testing_predict_on_structure/1mai_clean.pdb","tutorial_examples/testing_predict_on_structure/5c79_clean.pdb","tutorial_examples/testing_predict_on_structure/7yis_clean.pdb","tutorial_examples/testing_predict_on_structure/1h6h_clean.pdb"] # list of PDB file to make predictions for
 
