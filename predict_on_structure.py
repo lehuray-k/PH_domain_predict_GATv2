@@ -381,7 +381,7 @@ class protein_representation:
             new_file_name = self.pdb_file.replace(".pdb","_GATv2-PIPcontacts-prediction.pdb")
         else:
             new_file_name = alternative_new_file_name
-        print("Writing predicted contacts to file %s"%(new_file_name)
+        print("Writing predicted contacts to file %s"%(new_file_name))
         modify_beta_factor_in_pdb(self.pdb_file,new_file_name,self.prediction.numpy().tolist())
 
 # load model
