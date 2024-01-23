@@ -24,12 +24,12 @@ INSTRUCTIONS FOR PREPARING PDB FILES
 """
 # USER DEFINED SETTINGS
 
-files = ["ph_domain_data/tutorial_examples/testing_predict_on_structure/1mai_clean.pdb","ph_domain_data/tutorial_examples/testing_predict_on_structure/5c79_clean.pdb","ph_domain_data/tutorial_examples/testing_predict_on_structure/7yis_clean.pdb","ph_domain_data/tutorial_examples/testing_predict_on_structure/1h6h_clean.pdb"] # list of PDB file to make predictions for
+files = ["ph_domain_data/tutorial_examples/1mai_clean.pdb","ph_domain_data/tutorial_examples/5c79_clean.pdb","ph_domain_data/testing_predict_on_structure/7yis_clean.pdb","ph_domain_data/testing_predict_on_structure/1h6h_clean.pdb"] # list of PDB file to make predictions for
 
 model_weights_file = "ph_domain_data/models/GATv2model_2023-06-10_01_10foldCV_seed907_fold7.h5" # location of trained model parameters
 
 write_new_structure_with_predicted_contacts = True # whether or not to write a new PDB file with predicted contacts in the beta/temp factor column
-plot_predicted_contacts = False # whether or not to make matplotlib plot of predictions
+plot_predicted_contacts = True # whether or not to make matplotlib plot of predictions
 #-----------------------------------------------------#
 
 if plot_predicted_contacts == True:
