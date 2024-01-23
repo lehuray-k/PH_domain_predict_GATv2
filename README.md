@@ -14,11 +14,11 @@ To make predictions, we have prepared four tutorial examples found in ph_domain_
 
 files = ["tutorial_examples/testing_predict_on_structure/1mai_clean.pdb","tutorial_examples/testing_predict_on_structure/5c79_clean.pdb","tutorial_examples/testing_predict_on_structure/7yis_clean.pdb","tutorial_examples/testing_predict_on_structure/1h6h_clean.pdb"] # list of PDB file to make predictions for
 
-On a linux system, if all dependencies have been installed, the simplest way to run the script is to download the repository from github either manually or using git
+On a linux system, if all dependencies have been installed, the simplest way to run the script is to download the repository from github either manually or using git, which should only take seconds:
 
 git clone https://github.com/lehuray-k/PH_domain_predict_GATv2.git
 
-Then use python (must be python3) to run predictions
+Then use python (must be python3) to run predictions:
 
 python predict_on_structure.py
 
