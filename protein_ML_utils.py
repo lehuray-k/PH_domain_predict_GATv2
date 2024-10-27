@@ -11,7 +11,24 @@ import copy
 np.set_printoptions(threshold=np.inf)
 
 def amino_acid_code_converter_three_to_one(three_letter_code):
-    """takes as input a three letter amino acid code and outputs the equivalent one letter amino acid code"""
+    """Transforms a three letter amino acid code to one letter amino acid code. Only handles one amino acid code at a time.
+
+    Parameters
+    ----------
+    three_letter_code : str
+        Three letter amino acid code, for a sigle amino acid, in capitals, e.g. "GLY".
+        Also accepts alternative amino acid codes MSE and CME.
+
+    Returns
+    -------
+    str
+        One letter amino acid code
+
+    Raises
+    ------
+    Exception
+        Raises an exception if the input three letter code is not recognised
+    """
     three_letter_code_list = ["GLY","ALA","LEU","MET","PHE","TRP","LYS","GLN","GLU","SER","PRO","VAL","ILE","CYS",
                                 "TYR","HIS","ARG","ASN","ASP","THR","MSE","CME"]
     one_letter_code_list = ["G","A","L","M","F","W","K","Q","E","S","P","V","I","C","Y","H","R","N","D","T","M","C"]
@@ -29,10 +46,28 @@ def amino_acid_code_converter_three_to_one(three_letter_code):
 
 def extract_resids_sequence_and_beta_factor_from_pdb(PDB_file):
     """
-    takes PDB file and returns numpy 2d array whose elements are [resnum,resname,beta_factor]
-    beta factor is taken from the Ca
-    :param PDB_file: str path to PDB file
+    Takes PDB file and returns numpy 2d array of shape (n_residues, 3) whose elements are [resnum,resname,beta_factor] for each residue
+    The beta factor value for the alpha-carbon is selected
+    Uses MDAnalysis library.
+
     :return: data_array
+
+    Parameters
+    ----------
+    PDB_file : str
+        Path to PDB file
+
+    Returns
+    -------
+    numpy.ndarray
+        2d array of of shape (n_residues, 3).
+        The elements of first dimension are the residues
+        The elements of the second dimension are [resnum (Str), resname (Str), beta_factor (Str)] for the residue
+
+    Raises
+    ------
+    Exception
+        Raises exception when a mismatch in residue ids is detected
     """
     structure = mda.Universe(PDB_file)
     res_ids = []
@@ -46,114 +81,19 @@ def extract_resids_sequence_and_beta_factor_from_pdb(PDB_file):
         else:
             raise Exception("Atom resid not in residue list")
     data_array = np.array(data_array)
+    # select only unique rows in the array, this corrects for an issue in MDAnalysis with rare PDBs where there are alternate coordinates for some atoms leading to duplicate residues in MDAnalysis
     unique_rows, indices = np.unique(data_array, axis=0, return_index=True)
     data_array = unique_rows[np.argsort(indices)]
-    # select only unique rows in the array, this corrects for an issue in MDAnalysis with rare PDBs where there a alternate coordinates for some atoms leading to duplicate residues in MDAnalysis
-    #data_array = np.vstack({tuple(row) for row in data_array})
-    return(data_array)
-
-def hydrophobicity_from_sequence(sequence):
-    hydrophobicity_dict = {'A':41,
-                           'R':-14,
-                           'N':-28,
-                           'D':-55,
-                           'C':49,
-                           'Q':-10,
-                           'E':-31,
-                           'G':0,
-                           'H':8,
-                           'I':99,
-                           'L':97,
-                           'K':-23,
-                           'M':74,
-                           'F':100,
-                           'P':-46,
-                           'S':-5,
-                           'T':13,
-                           'W':97,
-                           'Y':63,
-                           'V':76}
-    hydrophobicity_array = np.zeros((len(sequence),1))
-    for x in range(0,len(sequence)):
-        hydrophobicity_array[x] = hydrophobicity_dict[sequence[x]]/100
-    return hydrophobicity_array
-
-def generate_psiblast_pssm(sequence):
-    """
-    Runs psiblast to generate position specific scoring matrix (pssm) from sequence alignments
-    :param sequence: amino acid sequence (str)
-    :return: pssm as numpy array
-    """
-    # write temporary FASTA file for sequence
-    fasta_file = open("/tmp/"+sequence+".fasta","w")
-    fasta_file.write(sequence)
-    fasta_file.close()
-    # generate temporary pssm file
-    os.system("psiblast -db swissprot -query /tmp/%s.fasta -num_iterations 3 -out_ascii_pssm /tmp/%s.pssm"%(sequence,sequence))
-    pssm_file_lines = open("/tmp/"+sequence+".pssm","r").readlines()
-    # filter pssm lines to only those which have a number (corresponding the last digit of resnumbered in position 4.
-    # this filters out lines which don't contain the pssm data
-    filtered_pssm_file_lines = []
-    for a in range(0,len(pssm_file_lines)):
-        try:
-            if pssm_file_lines[a][4].isdigit():
-                filtered_pssm_file_lines.append(pssm_file_lines[a].split(' '))
-        except:
-            pass
-    for a in range(0,len(filtered_pssm_file_lines)):
-        while '' in filtered_pssm_file_lines[a]:
-            filtered_pssm_file_lines[a].remove('')
-        filtered_pssm_file_lines[a] = filtered_pssm_file_lines[a][2:22]
-    filtered_pssm_file_lines = np.array(filtered_pssm_file_lines,dtype=float)
-    pssm = filtered_pssm_file_lines
-    return(pssm)
-
-def RaptorX_predictproperty(sequence):
-    """
-    Runs RaptorX predict property and returns matrices of three-state secondary structure prediction (SS3) and solvent accessibility (SA)
-    :param sequence: amino acid sequence (str)
-    :return: ss3_array, SA_array
-    """
-    # write temporary FASTA file for sequence
-    fasta_file = open("/tmp/"+sequence+".fasta","w")
-    fasta_file.write(sequence)
-    fasta_file.close()
-    # run RaptorX, generating temporary RaptorX prediction files
-    os.system("sh /usr/not-backed-up-2/kyle/ML/literature_code/Predict_Property/Predict_Property.sh -i /tmp/%s.fasta -o /tmp/%s"%(sequence,sequence))
-    # parse three-state secondary structure prediction SS3
-    ss3_array = []
-    ss3_file_lines = open("/tmp/%s/%s.ss3"%(sequence,sequence)).readlines()
-    ss3_file_lines = ss3_file_lines[2:]
-    for a in range(0,len(ss3_file_lines)):
-        ss3_file_lines[a] = ss3_file_lines[a].split(" ")
-        while "" in ss3_file_lines[a]:
-            ss3_file_lines[a].remove("")
-        # the line is now a list with elements [resid,amino_acid,letter_of_predicted_SS,probH,probE,probC,newline character]
-        # store the probabilities in the array
-        ss3_array.append([ss3_file_lines[a][3],ss3_file_lines[a][4],ss3_file_lines[a][5]])
-    ss3_array = np.array(ss3_array,dtype=float)
-    # parse three-state solvent accessibility SA
-    SA_array = []
-    SA_file_lines = open("/tmp/%s/%s.acc"%(sequence,sequence)).readlines()
-    SA_file_lines = SA_file_lines[3:]
-    for a in range(0,len(SA_file_lines)):
-        SA_file_lines[a] = SA_file_lines[a].split(" ")
-        while "" in SA_file_lines[a]:
-            SA_file_lines[a].remove("")
-        # the line is now a list with elements [resid,amino_acid,letter_of_predicted_SS,probH,probE,probC,newline character]
-        # store the probabilities in the array
-        SA_array.append([SA_file_lines[a][3],SA_file_lines[a][4],SA_file_lines[a][5]])
-    SA_array = np.array(SA_array,dtype=float)
-    return(ss3_array,SA_array)
+    return data_array
 
 def one_hot_AA_encoding(sequence):
     """
     Returns one hot encoding matrix in the form
             A R N D C Q E G H I L K M F P S T W Y V
-    pos 1
-    pos 2
-    pos 3
-    pos 4
+    pos 1   1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+    pos 2   0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0
+    pos 3   0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0
+    pos 4   0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
     etc.
     :param sequence: STR amino acid sequence in one-letter format
     :return: np.array one_hot_AA_encoding_matrix
@@ -167,6 +107,18 @@ def one_hot_AA_encoding(sequence):
     return(one_hot_encoding_matrix)
 
 def charge_encoding(sequence):
+    """Encodes charges of amino acid sequences using simple naive model where K and R are assigned +1 charge, H +0.8 and D and E -1, returning one charge value per residue in the sequence
+
+    Parameters
+    ----------
+    sequence : str or array-like
+        Amino acid sequence encoded using one-letter code
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of shape (n_amino_acids, 1) representing the assigned charges for each amino acid
+    """
     sequence_length = len(sequence)
     matrix = np.zeros((sequence_length,1))
     for AA in range(0,len(sequence)):
@@ -180,9 +132,21 @@ def charge_encoding(sequence):
             matrix[AA,0] = -1
         elif sequence[AA] == "E":
             matrix[AA,0] = -1
-    return(matrix)
+    return matrix
 
 def one_hot_charge_encoding(sequence):
+    """Encodes charges of amino acid sequences using simple naive model where K and R are assigned +1 charge, H +0.8 and D and E -1, returning 3 values per residue in the sequence (correspoding to postively charged, neutral or negatively charged)
+
+    Parameters
+    ----------
+    sequence : str or array-like
+        Amino acid sequence encoded using one-letter code
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of shape (n_amino_acids, 3) representing the assigned charges for each amino acid. Similar to one-hot encoding, the elements of the second dimension correspond to positive charge, neutral charge and negative charge.
+    """
     sequence_length = len(sequence)
     matrix = np.zeros((sequence_length,3))
     for AA in range(0,len(sequence)):
@@ -198,25 +162,76 @@ def one_hot_charge_encoding(sequence):
             matrix[AA,2] = 1
         else:
             matrix[AA,1] = 1
-    return(matrix)
+    return matrix
 
 def shrake_rupley_solvent_accessibility(structure,mode="residue"):
+    """
+    Calculates shrake-rupley solvent accessibility for each amino acid in a protein structure using MDTraj.
+
+    Parameters
+    ----------
+    structure : str
+        PDB file path
+    mode : str, optional
+        Mode option for MDTraj shake_rupley method, by default "residue"
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of shape (n_amino_acids, 1) representing the calculated shrake-rupley solvent accessibility for each amino acid
+    """
     structure = mdtraj.load(structure)
     shake_rupley_sa = mdtraj.shrake_rupley(structure,mode=mode).transpose()
-    return(shake_rupley_sa)
+    return shake_rupley_sa
 
 def DSSP_threestate_simplified(structure):
+    """
+    Calculates simplified DSSP secdonary structure class labels for each amino acid in a protein structure using MDTraj, and returns this in one-hot encoded format.
+    
+    Parameters
+    ----------
+    structure : str
+        PDB file path
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of shape (n_amino_acids, 3) representing the assigned three-state DSSP secondary structure label for each amino acid as a one-hot vector.
+        In simplified DSSP annotation helices are H, strands are E and coiled/unstructured elements are C. In this function the annotations are encoded as a one-hot vector, e.g.:
+                    H E C
+            pos 1   1 0 0
+            pos 2   1 0 0
+            pos 3   0 0 1
+            pos 4   0 1 0
+            etc.
+    """
     structure = mdtraj.load(structure)
     DSSP = mdtraj.compute_dssp(structure,simplified=True)
+    print(DSSP)
     # create the OneHotEncoder object
     encoder = OneHotEncoder(categories=[['H', 'E', 'C']])
     # reshape the input array to a 2D matrix
     arr_reshaped = np.reshape(DSSP, (-1, 1))
     # fit the encoder to the reshaped array and transform it to a one-hot encoded array
     one_hot_encoded = encoder.fit_transform(arr_reshaped).toarray()
-    return(one_hot_encoded)
+    return one_hot_encoded
 
 def compute_residue_pairwise_distance_matrix(structure,pad_to=None):
+    """
+    Computes pairwise distance (in nanometers) between all amino acids in protein structure using MDTraj and the alpha-carbon positions.
+
+    Parameters
+    ----------
+    structure : str
+        PDB file path
+    pad_to : int, optional
+        Optionally uses zero-padding to pad the returned matrix to a sequence length set by pad_to, by default None.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of shape (n_amino_acids, n_amino_acids) containing the pairwise distance (in nanometers) between the alpha-carbon positions of all amino acids in the protein structure.
+    """
     structure = mdtraj.load(structure)
     residue_index_list = []
     for residue in structure.topology.residues:
@@ -237,9 +252,29 @@ def compute_residue_pairwise_distance_matrix(structure,pad_to=None):
     if pad_to != None:
         pad_width = ((0, pad_to-np.shape(distance_matrix)[0]), (0, pad_to-np.shape(distance_matrix)[0]))
         distance_matrix = np.pad(distance_matrix, pad_width, mode='constant', constant_values=0)
-    return(distance_matrix)
+    return distance_matrix
 
 def compute_inter_residue_unit_vectors(PDB_file,pad_to=None):
+    """
+    Computes pairwise unit vectors between all pairs of amino acids in protein structure using MDTraj and the alpha-carbon positions.
+
+    Parameters
+    ----------
+    structure : str
+        PDB file path
+    pad_to : int, optional
+        Optionally uses zero-padding to pad the returned matrix to a sequence length set by pad_to, by default None.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of shape (n_amino_acids, n_amino_acids, 3) containing the pairwise unit vectors between the alpha-carbon positions of all amino acids in the protein structure.
+
+    Raises
+    ------
+    Exception
+        Raises exception when a mismatch in residue ids is detected
+    """
     structure = mda.Universe(PDB_file)
     res_ids = []
     position_array = []
@@ -262,9 +297,28 @@ def compute_inter_residue_unit_vectors(PDB_file,pad_to=None):
             unit_vector_matrix[AA1][AA2][0] = unit_vector[0]
             unit_vector_matrix[AA1][AA2][1] = unit_vector[1]
             unit_vector_matrix[AA1][AA2][2] = unit_vector[2]
-    return(unit_vector_matrix)
+    return unit_vector_matrix
 
 def charge_neighbourhood_from_distance_matrix(sequence,distance_cutoff,distance_matrix = None,protein_index_in_matrix=None):
+    """Computes total charge within a radial distance of each amino acid, using simplified charge assignments (K, R, H = +1 charge; D, E = -1 charge).
+
+    Parameters
+    ----------
+    sequence : str or array-like
+        Amino acid sequence encoded using one-letter code
+    distance_cutoff : float
+        Distance cutoff from the alpha carbon in nanometers, charges will be counted for all amino acids within this distance
+    distance_matrix : numpy.ndarray, optional
+        Optional, by default None, in which case the distance matrix be calculated.
+        Array containing the pairwise unit vectors between the alpha-carbon positions of all amino acids in the protein structure.
+    protein_index_in_matrix : int, optional
+        If provided distance matrix contains addition dimension for multiple proteins, specifies the index for the protein of interest, by default None
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of shape (n_amino_acids, 1) representing the total charge within the cutoff distance neighbourhood of each amino acid.
+    """
     if distance_matrix is None:
         distance_matrix_file = open("/home/kyle/membrane_machine_learning/DCRNN/ph_domain_data/preprocessed_data/distance_matrices_dim100xNonexNone_06Oct23.pkl","rb")
         distance_matrix = pkl.load(distance_matrix_file)
@@ -291,9 +345,25 @@ def charge_neighbourhood_from_distance_matrix(sequence,distance_cutoff,distance_
                     neighbourhood_charge_matrix[x] = neighbourhood_charge_matrix[x]-1
                 elif sequence[y] == 'E':
                     neighbourhood_charge_matrix[x] = neighbourhood_charge_matrix[x]-1
-    return(neighbourhood_charge_matrix)
+    return neighbourhood_charge_matrix
 
 def pdb_to_pandas(pdb_file):
+    """
+    Imports a protein structure PDB file as a pandas array
+
+    Parameters
+    ----------
+    pdb_file : str
+        Path to PDB file
+
+    Returns
+    -------
+    pandas.core.frame.DataFrame
+        Dataframe representation of the PDB file, where each row contains the data for a residue, with the following columns:
+            ['ATOM', 'Atom serial number', 'Atom name', 'Alternate location indicator', 'Residue name', 'Chain identifier',
+            'Residue sequence number', 'Code for insertions of residues','X coordinate', 'Y coordinate', 'Z coordinate',
+            'Occupancy', 'Temperature factor', 'Segment identifier', 'Element symbol', 'Charge']
+    """
     file = open(pdb_file,"r")
     lines = file.readlines()
     file.close()
@@ -332,9 +402,22 @@ def pdb_to_pandas(pdb_file):
 
     # Create DataFrame from parsed_data
     df = pd.DataFrame(parsed_data, columns=columns)
-    return(df)
+    return df
 
 def pandas_to_pdb(pandas_dataframe,pdb_file_to_write):
+    """
+    Writes a pandas representation of a protein structure to a PDB file format.
+
+    Parameters
+    ----------
+    pandas_dataframe : pandas.core.frame.DataFrame
+        Dataframe representation of the PDB file, where each row contains the data for a residue, with the following columns:
+            ['ATOM', 'Atom serial number', 'Atom name', 'Alternate location indicator', 'Residue name', 'Chain identifier',
+            'Residue sequence number', 'Code for insertions of residues','X coordinate', 'Y coordinate', 'Z coordinate',
+            'Occupancy', 'Temperature factor', 'Segment identifier', 'Element symbol', 'Charge']
+    pdb_file_to_write : str
+        Path to PDB file to be written.
+    """
     lines = []
     df = pandas_dataframe
     for row in df.iterrows():
@@ -362,6 +445,17 @@ def pandas_to_pdb(pandas_dataframe,pdb_file_to_write):
     file.close()
 
 def modify_beta_factor_in_pdb(pdb_file,pdb_file_to_write,new_beta_factor_list):
+    """Reads the values of the beta-factor values of a PDB file, sets these to new values provided in new_beta_factor_list and writes a new PDB file.
+
+    Parameters
+    ----------
+    pdb_file : str
+        Path to pdb file to load
+    pdb_file_to_write : str
+        Path for pdb file to be written, set the same as pdb_file for overwrite behaviour
+    new_beta_factor_list : list
+        List of new beta factor values. Must be provided for the full sequence in order.
+    """
     pdb_df = pdb_to_pandas(pdb_file)
     residue_list = pdb_df['Residue sequence number'].unique()
     for x in range(0,len(residue_list)):

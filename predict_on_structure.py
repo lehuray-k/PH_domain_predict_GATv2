@@ -38,25 +38,46 @@ if plot_predicted_contacts == True:
 # Define functions for extracting features from structure
 
 def sequence_from_pdb_mdtraj(structure_file):
+    """
+    Uses MDTraj to obtain amino acid sequence from PDB structure file
+
+    Parameters
+    ----------
+    structure_file : str
+        Path to PDB structure
+
+    Returns
+    -------
+    str
+        Amino acid sequence in one-letter format encoding
+    """
     traj = mdtraj.load(structure_file)
     # Get the topological information
     topology = traj.topology
     # Extract the sequence
     sequence_mdtraj = topology.to_fasta()
     sequence_mdtraj = ''.join(sequence_mdtraj)
-    return(sequence_mdtraj)
+    return sequence_mdtraj
 
 def one_hot_AA_encoding(sequence):
     """
     Returns one hot encoding matrix in the form
             A R N D C Q E G H I L K M F P S T W Y V
-    pos 1
-    pos 2
-    pos 3
-    pos 4
+    pos 1   1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+    pos 2   0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0
+    pos 3   0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0
+    pos 4   0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
     etc.
-    :param sequence: STR amino acid sequence in one-letter format
-    :return: np.array one_hot_AA_encoding_matrix
+
+    Parameters
+    ----------
+    sequence : str
+        Amino acid sequence in one-letter format
+
+    Returns
+    -------
+    numpy.ndarray
+        Amino acid sequence as one-hot encoded matrix
     """
     masterkey_sequence = "ARNDCQEGHILKMFPSTWYVARNDCQEGHILKMFPSTWYV"
     sequence_length = len(sequence)
@@ -64,9 +85,21 @@ def one_hot_AA_encoding(sequence):
     for AA in range(0,len(sequence)):
         matrix[AA,masterkey_sequence.index(sequence[AA])] = 1
     one_hot_encoding_matrix = matrix
-    return(one_hot_encoding_matrix)
+    return one_hot_encoding_matrix
 
 def beta_factor_of_c_alpha_atoms_biopandas(structure_file):
+    """Uses biopandas library to obtain the beta factor value of each amino acid alpha-carbon from a protein structure PDB file
+
+    Parameters
+    ----------
+    structure_file : str
+        Path to PDB file
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of shape (n_amino_acids, 1) representing the beta factor value for each amino acid alpha-carbon 
+    """
     parser = PDBParser()
     structure = parser.get_structure("structure_file", structure_file)
     ca_bfactor_list = []
@@ -77,14 +110,50 @@ def beta_factor_of_c_alpha_atoms_biopandas(structure_file):
                     ca_atom = residue["CA"]
                     bfactor = ca_atom.get_bfactor()
                     ca_bfactor_list.append(bfactor)
-    return(np.array(ca_bfactor_list))
+    ca_bfactor_array = np.array(ca_bfactor_list)
+    return ca_bfactor_array
 
 def shrake_rupley_solvent_accessibility(structure,mode="residue"):
+    """
+    Calculates shrake-rupley solvent accessibility for each amino acid in a protein structure using MDTraj.
+
+    Parameters
+    ----------
+    structure : str
+        PDB file path
+    mode : str, optional
+        Mode option for MDTraj shake_rupley method, by default "residue"
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of shape (n_amino_acids, 1) representing the calculated shrake-rupley solvent accessibility for each amino acid
+    """
     structure = mdtraj.load(structure)
     shake_rupley_sa = mdtraj.shrake_rupley(structure,mode=mode).transpose()
-    return(shake_rupley_sa)
+    return shake_rupley_sa
 
 def DSSP_threestate_simplified(structure):
+    """
+    Calculates simplified DSSP secdonary structure class labels for each amino acid in a protein structure using MDTraj, and returns this in one-hot encoded format.
+    
+    Parameters
+    ----------
+    structure : str
+        PDB file path
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of shape (n_amino_acids, 3) representing the assigned three-state DSSP secondary structure label for each amino acid as a one-hot vector.
+        In simplified DSSP annotation helices are H, strands are E and coiled/unstructured elements are C. In this function the annotations are encoded as a one-hot vector, e.g.:
+                    H E C
+            pos 1   1 0 0
+            pos 2   1 0 0
+            pos 3   0 0 1
+            pos 4   0 1 0
+            etc.
+    """
     structure = mdtraj.load(structure)
     DSSP = mdtraj.compute_dssp(structure,simplified=True)
     # create the OneHotEncoder object
@@ -93,9 +162,25 @@ def DSSP_threestate_simplified(structure):
     arr_reshaped = np.reshape(DSSP, (-1, 1))
     # fit the encoder to the reshaped array and transform it to a one-hot encoded array
     one_hot_encoded = encoder.fit_transform(arr_reshaped).toarray()
-    return(one_hot_encoded)
+    return one_hot_encoded
 
 def compute_distance_matrix_and_inter_residue_unit_vectors(PDB_file):
+    """
+    Computes the pairwise distance (in nanometers) and the unit vectors between all pairs of amino acids in a protein structure using MDTraj and the alpha-carbon positions.
+
+    Parameters
+    ----------
+    PDB_file : str
+        Path to PDB file
+
+    Returns
+    -------
+    numpy.ndarray: distance_matrix
+        Array of shape (n_amino_acids, n_amino_acids) containing the pairwise distance (in nanometers) between the alpha-carbon positions of all amino acids in the protein structure.
+
+    numpy.ndarray: unit_vector_matrix
+        Array of shape (n_amino_acids, n_amino_acids, 3) containing the pairwise unit vectors between the alpha-carbon positions of all amino acids in the protein structure.
+    """
     structure = mdtraj.load(PDB_file)
     residue_indices = list(residue.index for residue in structure.topology.residues)  # Convert generator to a list
     num_residues = len(residue_indices)
@@ -120,9 +205,25 @@ def compute_distance_matrix_and_inter_residue_unit_vectors(PDB_file):
         warnings.simplefilter("ignore", RuntimeWarning)  # Ignore RuntimeWarnings in the case of division by zero, which arises on diagonals of matrix. This will be handled by setting the NaNs to 0
         unit_vector_matrix = np.divide(displacement_vectors,np.expand_dims(distance_matrix,-1))
         unit_vector_matrix[np.isnan(unit_vector_matrix)] = 0
-    return(distance_matrix,unit_vector_matrix)
+    return distance_matrix,unit_vector_matrix
 
 def charge_neighbourhood_from_distance_matrix(sequence, distance_cutoff, distance_matrix):
+    """Computes total charge within a radial distance of each amino acid, using simplified charge assignments (K, R, H = +1 charge; D, E = -1 charge).
+
+    Parameters
+    ----------
+    sequence : str or array-like
+        Amino acid sequence encoded using one-letter code
+    distance_cutoff : float
+        Distance cutoff from the alpha carbon in nanometers, charges will be counted for all amino acids within this distance
+    distance_matrix : numpy.ndarray
+        Array of shape (n_amino_acids, n_amino_acids) containing the pairwise unit vectors between the alpha-carbon positions of all amino acids in the protein structure.
+
+    Returns
+    -------
+    _type_
+        _description_
+    """
     # Map amino acids to their charges
     amino_acid_charge_map = {'K': 1, 'R': 1, 'H': 1, 'D': -1, 'E': -1}
 
@@ -137,6 +238,22 @@ def charge_neighbourhood_from_distance_matrix(sequence, distance_cutoff, distanc
     return neighbourhood_charge_matrix
 
 def pdb_to_pandas(pdb_file):
+    """
+    Imports a protein structure PDB file as a pandas array
+
+    Parameters
+    ----------
+    pdb_file : str
+        Path to PDB file
+
+    Returns
+    -------
+    pandas.core.frame.DataFrame
+        Dataframe representation of the PDB file, where each row contains the data for a residue, with the following columns:
+            ['ATOM', 'Atom serial number', 'Atom name', 'Alternate location indicator', 'Residue name', 'Chain identifier',
+            'Residue sequence number', 'Code for insertions of residues','X coordinate', 'Y coordinate', 'Z coordinate',
+            'Occupancy', 'Temperature factor', 'Segment identifier', 'Element symbol', 'Charge']
+    """
     file = open(pdb_file,"r")
     lines = file.readlines()
     file.close()
@@ -175,9 +292,22 @@ def pdb_to_pandas(pdb_file):
 
     # Create DataFrame from parsed_data
     df = pd.DataFrame(parsed_data, columns=columns)
-    return(df)
+    return df
 
 def pandas_to_pdb(pandas_dataframe,pdb_file_to_write):
+    """
+    Writes a pandas representation of a protein structure to a PDB file format.
+
+    Parameters
+    ----------
+    pandas_dataframe : pandas.core.frame.DataFrame
+        Dataframe representation of the PDB file, where each row contains the data for a residue, with the following columns:
+            ['ATOM', 'Atom serial number', 'Atom name', 'Alternate location indicator', 'Residue name', 'Chain identifier',
+            'Residue sequence number', 'Code for insertions of residues','X coordinate', 'Y coordinate', 'Z coordinate',
+            'Occupancy', 'Temperature factor', 'Segment identifier', 'Element symbol', 'Charge']
+    pdb_file_to_write : Path to PDB file to be written.
+        str
+    """
     lines = []
     df = pandas_dataframe
     for row in df.iterrows():
@@ -205,6 +335,18 @@ def pandas_to_pdb(pandas_dataframe,pdb_file_to_write):
     file.close()
 
 def modify_beta_factor_in_pdb(pdb_file,pdb_file_to_write,new_beta_factor_list):
+    """
+    Reads the values of the beta-factor values of a PDB file, sets these to new values provided in new_beta_factor_list and writes a new PDB file.
+
+    Parameters
+    ----------
+    pdb_file : str
+        Path to pdb file to load
+    pdb_file_to_write : str
+        Path for pdb file to be written, set the same as pdb_file for overwrite behaviour
+    new_beta_factor_list : list
+        List of new beta factor values. Must be provided for the full sequence in order.
+    """
     pdb_df = pdb_to_pandas(pdb_file)
     residue_list = pdb_df['Residue sequence number'].unique()
     for x in range(0,len(residue_list)):
@@ -214,18 +356,59 @@ def modify_beta_factor_in_pdb(pdb_file,pdb_file_to_write,new_beta_factor_list):
 # Define custom model architecture
 
 class GraphAttention_v2(layers.Layer):
+    """
+    Tensorflow Keras layer implementation of graph attention head using the GATv2 mechanism from the paper:
+    
+    'How Attentive are Graph Attention Networks?', Shaked Brody, Uri Alon, Eran Yahav, arXiv preprint arXiv:2105.14491 (2021)
+
+    This implementation has been adapted to include edge features 
+
+    -------
+    Mathematical summary
+
+    The output for the GATv2 layer at node_i (Output_i) is calculated as follows:
+
+        Let h_a be node features of the node_a
+
+        Let e_a,b be features of the edge from node_a to node_b
+
+        Let W_* represent parameters of the network
+        
+        Calculate the attention coefficient c_(i,j) of a node j connected to node_i
+            c_(i,j) = W_attention•LeakyReLu([W_nodes•h_i || W_neighbour-nodes•h_j || W_edges•e_(i,j)])
+                where • denotes matric multiplication and || denotes concatenation
+
+        Calculate the attention score for a node j connected to node_i
+            a_(i,j) = SOFTMAX_over_all_j( c_(i,j) )
+
+        Calculate Output at node_i
+            Output_i = SIGMOID( SUM_over_all_j[a_(i,j) * (W_neighbour•h_j)] )
+                where * denotes element-wise multiplication and • denotes matrix multiplication
+                Note that the final SIGMOID non-linearity is not implemented in this class, so that the output can be concatenated and/or averaged in a multi-head strategy and then the non-linearity applied
+    -------
+    """
     def __init__(
         self,
         units,
         kernel_regularizer=None,
         **kwargs,
     ):
+        """
+        Parameters
+        ----------
+        units : int
+            Number of hidden units for node parameter matrices (edge and attention parameter matrices are scale accordingly)
+        kernel_regularizer :  tf.keras.Regularizer , optional
+            Optional regularizer, by default None
+        """
         super().__init__(**kwargs)
         self.units = units
         self.kernel_initializer = keras.initializers.GlorotUniform(seed=134631644)
         self.kernel_regularizer = keras.regularizers.get(kernel_regularizer)
 
     def build(self, input_shape):
+        # Initialise parameters
+        # Node parameter matrix
         self.kernel_left = self.add_weight(
             shape=(input_shape[0][-1], self.units),
             trainable=True,
@@ -233,6 +416,7 @@ class GraphAttention_v2(layers.Layer):
             regularizer=self.kernel_regularizer,
             name="kernel_left",
         )
+        # Node neighbour parameter matrix
         self.kernel_right = self.add_weight(
             shape=(input_shape[0][-1], self.units),
             trainable=True,
@@ -240,6 +424,7 @@ class GraphAttention_v2(layers.Layer):
             regularizer=self.kernel_regularizer,
             name="kernel_right",
         )
+        # Attention parameter matrix
         self.kernel_attention = self.add_weight(
             shape=((self.units * 2) + input_shape[2][-1], 1),
             trainable=True,
@@ -247,6 +432,7 @@ class GraphAttention_v2(layers.Layer):
             regularizer=self.kernel_regularizer,
             name="kernel_attention",
         )
+        # Edge parameter matrix
         self.kernel_edge_features_attention = self.add_weight(
             shape=(input_shape[2][-1],input_shape[2][-1]),
             trainable=True,
@@ -259,7 +445,7 @@ class GraphAttention_v2(layers.Layer):
     def call(self, inputs):
         node_states, edges, edge_features = inputs
         node_states = tf.squeeze(node_states,axis=0)
-        # if edges is a ragged tensor then convert to normal tensor. We need this because we can't index into the ragged dimension of ragged tensors
+        # If edges is a ragged tensor then convert to normal tensor. We need this because we can't index into the ragged dimension of ragged tensors
         if isinstance(edges,tf.RaggedTensor) == True:
             edges = edges.to_tensor()
         edges = tf.squeeze(edges,axis=0)
@@ -269,7 +455,7 @@ class GraphAttention_v2(layers.Layer):
         # Linearly transform node states
         node_states_transformed_left = tf.matmul(node_states, self.kernel_left)
         node_states_transformed_right = tf.matmul(node_states, self.kernel_right)
-        # (1) Compute pair-wise attention scores using GATv2_attention mechanism
+        # (1) Compute pair-wise attention co-efficients
         node_states_expanded = tf.concat((tf.gather(node_states_transformed_left, edges[:,0]),tf.gather(node_states_transformed_right, edges[:,1])),axis=-1)
         node_states_expanded = tf.nn.leaky_relu(node_states_expanded)
         edge_features_gathered = tf.gather_nd(edge_features,edges)
@@ -277,7 +463,8 @@ class GraphAttention_v2(layers.Layer):
         node_states_expanded = tf.concat((node_states_expanded,edge_features_transformed),axis = -1)
         attention_scores = tf.matmul(node_states_expanded, self.kernel_attention)
         attention_scores = tf.squeeze(attention_scores, -1)
-        # (2) Normalize attention scores
+
+        # (2) Softmax and normalize to get attention scores
         attention_scores = tf.math.exp(tf.clip_by_value(attention_scores, -2, 2))
         attention_scores_sum = tf.math.unsorted_segment_sum(
             data=attention_scores,
@@ -289,19 +476,32 @@ class GraphAttention_v2(layers.Layer):
         )
         attention_scores_norm = attention_scores / attention_scores_sum
 
-        # (3) Gather node states of neighbors, apply attention scores and aggregate
+        # (3) Gather node states of neighbors, apply attention scores and aggregate to calculate output
         node_states_neighbors = tf.gather(node_states_transformed_right, edges[:, 1])
         out = tf.math.unsorted_segment_sum(
             data=node_states_neighbors * attention_scores_norm[:, tf.newaxis],
             segment_ids=edges[:, 0],
             num_segments=tf.shape(node_states)[0],
         )
-        #out = tf.math.add(node_states_transformed_left,out)
         out = tf.expand_dims(out, 0)
         return out
 
 class MultiHeadGraphAttention_v2(layers.Layer):
+    """
+    TF Keras layer which aggregates multiple graph attention heads, either by concatenation or averaging.
+    Performs non-linearity (ReLU) on the aggregated attention head outputs
+    """
     def __init__(self, units, num_heads=8, merge_type="concat", **kwargs):
+        """
+        Parameters
+        ----------
+        units : int
+            Hidden units dimension size for node parameters (other parameters are scaled accordingly)
+        num_heads : int, optional
+            Number of graph attention heads, by default 8
+        merge_type : str["concat" or "average"], optional
+            Optionally specificy method of aggregating graph attention head outputs, either "concat" or "average", by default "concat"
+        """
         super().__init__(**kwargs)
         self.num_heads = num_heads
         self.merge_type = merge_type
@@ -325,7 +525,17 @@ class MultiHeadGraphAttention_v2(layers.Layer):
 
 # Define class for processing protein structures and making predictions
 class protein_representation:
+    """
+    Class implementing the representation of the protein for the graph neural network and inference
+    """
     def __init__(self,pdb_file):
+        """_summary_
+
+        Parameters
+        ----------
+        pdb_file : str
+            Path to PDB file
+        """
         self.pdb_file = pdb_file
         self.node_features = None
         self.distance_matrix = None
@@ -335,6 +545,18 @@ class protein_representation:
         self.preprocess_structure()
 
     def preprocess_structure(self):
+        """
+        Prepare protein representation for graph neural network, by calculating node features, generating edge list and calculating edge features.
+        In this implementation the protein is treated as a fully-connected graph where all amino acids are connected to each other
+        Node features:
+            Amino acid identity (one hot encoding)
+            Simplified secondary structure class (one hot encoding)
+            Solvent accessible surface area
+            Total charge within 8 angstroms
+        Edge features:
+            Alpha carbon distance (nm) from amino acid i to amino acid j
+            Unit vector in direction from amino acid i to amino acid j (alpha carbons)
+        """
         print("\nProcessing input features from %s\n"%(self.pdb_file))
         self.sequence = sequence_from_pdb_mdtraj(self.pdb_file)
         self.one_hot = one_hot_AA_encoding(self.sequence)
@@ -345,10 +567,10 @@ class protein_representation:
         self.DSSP = DSSP_threestate_simplified(self.pdb_file)
         self.distance_matrix,self.inter_residue_unit_vectors = compute_distance_matrix_and_inter_residue_unit_vectors(self.pdb_file)
         self.neighbouring_charges = charge_neighbourhood_from_distance_matrix(self.sequence,0.8,distance_matrix = self.distance_matrix)
-        # concatenate node features
+        # Concatenate node features
         self.node_features = np.concatenate((self.one_hot,self.DSSP,self.shrake_rupley_sa,self.neighbouring_charges),axis=1)
-        # generate list of edges
-        # distance cutoff for determining neighbour status. Set to 200 = essentially inf. distance; allows fully-connected graph of protein structure
+        # Generate list of edges
+        # Distance cutoff for determining neighbour status. Set to 200 = essentially inf. distance; allows fully-connected graph of protein structure
         distance_cutoff = 200
         protein_neighbourhood_list = []
         for AA1 in range(0,np.shape(self.distance_matrix)[0]):
@@ -356,19 +578,32 @@ class protein_representation:
                     if self.distance_matrix[AA1][AA2] > 0: # residue will not have edge to itself
                         if self.distance_matrix[AA1][AA2] <= distance_cutoff:
                                 protein_neighbourhood_list.append([int(AA1),int(AA2)])
-        # prepare edge features
+        # Prepare edge features
         edge_features = []
         for AA1 in range(0,np.shape(self.distance_matrix)[0]):
             AA2_edge_features_list = []
             for AA2 in range(0,np.shape(self.distance_matrix)[0]):
                     AA2_edge_features_list.append([self.distance_matrix[AA1][AA2],self.inter_residue_unit_vectors[AA1][AA2][0],self.inter_residue_unit_vectors[AA1][AA2][1],self.inter_residue_unit_vectors[AA1][AA2][2]])
             edge_features.append(AA2_edge_features_list)
-        # set up input tensors
+        # Set up input tensors
         self.node_features = tf.expand_dims(tf.ragged.constant(self.node_features),0)
         self.edges_list = tf.expand_dims(tf.ragged.constant(protein_neighbourhood_list),0)
         self.edge_features = tf.expand_dims(tf.ragged.constant(edge_features),0)
 
     def predict_phosphoinositide_contacts(self,model):
+        """
+        Run trained model inference on protein representation to obtain prpedicted phosphoinositide contacts
+
+        Parameters
+        ----------
+        model :  tf.keras.Model 
+            Trained TF model
+
+        Yields
+        ------
+        self.prediction
+            Predicted phosphoinositide normalized contact frequency for each amino acid
+        """
         print("\nRunning prediction for %s\n"%(self.pdb_file))
         self.prediction = model.predict([self.node_features,self.edges_list,self.edge_features])
         self.prediction = tf.squeeze(self.prediction,axis=[-1])
@@ -377,6 +612,13 @@ class protein_representation:
         print("Predicted normalized frequency of contacts:\n"+str(self.prediction.numpy()))
 
     def output_prediction_to_new_pdb_file(self,alternative_new_file_name=None):
+        """_summary_
+
+        Parameters
+        ----------
+        alternative_new_file_name : str, optional
+            Optional path to write new PDB file name, by default None and will write new file with _GATv2-PIPcontacts-prediction appended to input PDB file new
+        """
         if alternative_new_file_name == None:
             new_file_name = self.pdb_file.replace(".pdb","_GATv2-PIPcontacts-prediction.pdb")
         else:

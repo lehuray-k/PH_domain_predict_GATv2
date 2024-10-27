@@ -19,6 +19,37 @@ pd.set_option("display.max_rows", 6)
 # Define custom graph attention architecture
 # BUILD THE MODEL
 class GraphAttention_v2(layers.Layer):
+    """
+    Tensorflow Keras layer implementation of graph attention head using the GATv2 mechanism from the paper:
+    
+    'How Attentive are Graph Attention Networks?', Shaked Brody, Uri Alon, Eran Yahav, arXiv preprint arXiv:2105.14491 (2021)
+
+    This implementation has been adapted to include edge features 
+
+    -------
+    Mathematical summary
+
+    The output for the GATv2 layer at node_i (Output_i) is calculated as follows:
+
+        Let h_a be node features of the node_a
+
+        Let e_a,b be features of the edge from node_a to node_b
+
+        Let W_* represent parameters of the network
+        
+        Calculate the attention coefficient c_(i,j) of a node j connected to node_i
+            c_(i,j) = W_attention•LeakyReLu([W_nodes•h_i || W_neighbour-nodes•h_j || W_edges•e_(i,j)])
+                where • denotes matric multiplication and || denotes concatenation
+
+        Calculate the attention score for a node j connected to node_i
+            a_(i,j) = SOFTMAX_over_all_j( c_(i,j) )
+
+        Calculate Output at node_i
+            Output_i = SIGMOID( SUM_over_all_j[a_(i,j) * (W_neighbour•h_j)] )
+                where * denotes element-wise multiplication and • denotes matrix multiplication
+                Note that the final SIGMOID non-linearity is not implemented in this class, so that the output can be concatenated and/or averaged in a multi-head strategy and then the non-linearity applied
+    -------
+    """
     def __init__(
         self,
         units,
@@ -26,12 +57,22 @@ class GraphAttention_v2(layers.Layer):
         kernel_regularizer=None,
         **kwargs,
     ):
+        """
+        Parameters
+        ----------
+        units : int
+            Number of hidden units for node parameter matrices (edge and attention parameter matrices are scale accordingly)
+        kernel_regularizer :  tf.keras.Regularizer , optional
+            Optional regularizer, by default None
+        """
         super().__init__(**kwargs)
         self.units = units
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.kernel_regularizer = keras.regularizers.get(kernel_regularizer)
 
     def build(self, input_shape):
+        # Initialise parameters
+        # Node parameter matrix
         self.kernel_left = self.add_weight(
             shape=(input_shape[0][-1], self.units),
             trainable=True,
@@ -39,6 +80,7 @@ class GraphAttention_v2(layers.Layer):
             regularizer=self.kernel_regularizer,
             name="kernel_left",
         )
+        # Node neighbour parameter matrix
         self.kernel_right = self.add_weight(
             shape=(input_shape[0][-1], self.units),
             trainable=True,
@@ -46,6 +88,7 @@ class GraphAttention_v2(layers.Layer):
             regularizer=self.kernel_regularizer,
             name="kernel_right",
         )
+        # Attention parameter matrix
         self.kernel_attention = self.add_weight(
             shape=((self.units * 2) + input_shape[2][-1], 1),
             trainable=True,
@@ -53,6 +96,7 @@ class GraphAttention_v2(layers.Layer):
             regularizer=self.kernel_regularizer,
             name="kernel_attention",
         )
+        # Edge parameter matrix
         self.kernel_edge_features_attention = self.add_weight(
             shape=(input_shape[2][-1],input_shape[2][-1]),
             trainable=True,
@@ -65,7 +109,7 @@ class GraphAttention_v2(layers.Layer):
     def call(self, inputs):
         node_states, edges, edge_features = inputs
         node_states = tf.squeeze(node_states,axis=0)
-        # if edges is a ragged tensor then convert to normal tensor. We need this because we can't index into the ragged dimension of ragged tensors
+        # If edges is a ragged tensor then convert to normal tensor. We need this because we can't index into the ragged dimension of ragged tensors
         if isinstance(edges,tf.RaggedTensor) == True:
             edges = edges.to_tensor()
         edges = tf.squeeze(edges,axis=0)
@@ -75,7 +119,7 @@ class GraphAttention_v2(layers.Layer):
         # Linearly transform node states
         node_states_transformed_left = tf.matmul(node_states, self.kernel_left)
         node_states_transformed_right = tf.matmul(node_states, self.kernel_right)
-        # (1) Compute pair-wise attention scores using GATv2_attention mechanism
+        # (1) Compute pair-wise attention co-efficients
         node_states_expanded = tf.concat((tf.gather(node_states_transformed_left, edges[:,0]),tf.gather(node_states_transformed_right, edges[:,1])),axis=-1)
         node_states_expanded = tf.nn.leaky_relu(node_states_expanded)
         edge_features_gathered = tf.gather_nd(edge_features,edges)
@@ -83,7 +127,8 @@ class GraphAttention_v2(layers.Layer):
         node_states_expanded = tf.concat((node_states_expanded,edge_features_transformed),axis = -1)
         attention_scores = tf.matmul(node_states_expanded, self.kernel_attention)
         attention_scores = tf.squeeze(attention_scores, -1)
-        # (2) Normalize attention scores
+
+        # (2) Softmax and normalize to get attention scores
         attention_scores = tf.math.exp(tf.clip_by_value(attention_scores, -2, 2))
         attention_scores_sum = tf.math.unsorted_segment_sum(
             data=attention_scores,
@@ -95,19 +140,32 @@ class GraphAttention_v2(layers.Layer):
         )
         attention_scores_norm = attention_scores / attention_scores_sum
 
-        # (3) Gather node states of neighbors, apply attention scores and aggregate
+        # (3) Gather node states of neighbors, apply attention scores and aggregate to calculate output
         node_states_neighbors = tf.gather(node_states_transformed_right, edges[:, 1])
         out = tf.math.unsorted_segment_sum(
             data=node_states_neighbors * attention_scores_norm[:, tf.newaxis],
             segment_ids=edges[:, 0],
             num_segments=tf.shape(node_states)[0],
         )
-        #out = tf.math.add(node_states_transformed_left,out)
         out = tf.expand_dims(out, 0)
         return out
 
 class MultiHeadGraphAttention_v2(layers.Layer):
+    """
+    TF Keras layer which aggregates multiple graph attention heads, either by concatenation or averaging.
+    Performs non-linearity (ReLU) on the aggregated attention head outputs
+    """
     def __init__(self, units, num_heads=8, merge_type="concat", **kwargs):
+        """
+        Parameters
+        ----------
+        units : int
+            Hidden units dimension size for node parameters (other parameters are scaled accordingly)
+        num_heads : int, optional
+            Number of graph attention heads, by default 8
+        merge_type : str["concat" or "average"], optional
+            Optionally specificy method of aggregating graph attention head outputs, either "concat" or "average", by default "concat"
+        """
         super().__init__(**kwargs)
         self.num_heads = num_heads
         self.merge_type = merge_type
@@ -130,8 +188,16 @@ class MultiHeadGraphAttention_v2(layers.Layer):
         return tf.nn.relu(outputs)
 
 def prepare_cross_validation_dataset(k,random_seed):
-    # process PH domain data
+    """Prepares k-fold cross-validation dataset from pre-processed data sampples given k and random_seed value
 
+    Parameters
+    ----------
+    k : int
+        Number of cross-validation folds
+    random_seed : int
+        Random set for data shuffling
+    """
+    # Process PH domain data:
     # LOAD NODE DATA
     Y_pickle_file = open("ph_domain_data/preprocessed_data/Y_values_processed_PROBABILITIES_dim100xNone_06Oct23.pkl", 'rb')
     X_pickle_file = open("ph_domain_data/preprocessed_data/X_values_processed_dim100xNonex25_06Oct23_onehot_DSSP_shakerupley_0.8chargeneighbourhood.pkl",'rb')
@@ -223,16 +289,16 @@ models_directory = "ph_domain_data/models/"
 number_of_features = 25
 
 for k in [5,10,20]:
-    # iterate over 5-fold, 10-fold and 20-fold crossvalidation
+    # Iterate over 5-fold, 10-fold and 20-fold crossvalidation
     for random_seed in [907,7635]:
-        # repeat for multiple random seeds
-        # prepare dataset for choice of k and seed
+        # Repeat for multiple random seeds
+        # Prepare dataset for choice of k and seed
         CV_set_data = prepare_cross_validation_dataset(k,random_seed)
         for CV_set in range(0,k):
-            # train model for each fold
+            # Train model for each fold
             model_name = "%s_%sfoldCV_seed%s_fold%s"%(model_name_prefix,str(k),str(random_seed),str(CV_set))
 
-            # define model using keras functional API
+            # Define model using keras functional API
             node_inputs = tf.keras.Input(shape=(None,number_of_features),batch_size=1)
             edges_list = tf.keras.Input(shape=(None,2),batch_size=1,dtype=tf.int64)
             edge_features = tf.keras.Input(shape=(None,None,4),batch_size=1)
@@ -244,12 +310,12 @@ for k in [5,10,20]:
             prediction = output
             X_train,X_test,Y_train,Y_test,edges_train,edges_test,edge_features_train,edge_features_test = CV_set_data[CV_set]
             
-            # build model
+            # Build model
             model = tf.keras.models.Model(inputs=[node_inputs,edges_list,edge_features], outputs=prediction)
             model.summary()
             model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0071),loss=tf.keras.losses.MeanSquaredError())
 
-            # define early stopping callback
+            # Define early stopping callback
             class CustomEarlyStoppingCallback(tf.keras.callbacks.Callback):
                 def __init__(self, validation_data, patience=8, restore_best_weights=True, start_from_epoch=4):
                     super(CustomEarlyStoppingCallback, self).__init__()
@@ -264,6 +330,9 @@ for k in [5,10,20]:
                     self.stopped_epoch = 0
 
                 def monitor_metric(self):
+                    """
+                    Function for monitoring MSE, Wasserstein Distance, sensitivity, specificity, precision and F1 score
+                    """
                     true_positives = 0
                     false_positives = 0
                     true_negatives = 0
