@@ -1,6 +1,12 @@
 Welcome to the codebase for the manuscript "Rapid Prediction of Lipid Interaction Sites on Pleckstrin Homology Domains Using Graph Neural Networks and Molecular Dynamics Simulations". This repository contains a prediction script for PH domain pdb structures, tutorial example data, model parameters, all training data as well as scripts for training and cross-validation.
 
-Requirements: python 3, tensorflow 2.13.0, keras 2.13, numpy, pandas, mdtraj, scikit-learn, matplotlib and biopython
+Dependencies: python 3, tensorflow 2.13.0, keras 2.13, numpy, pandas, mdtraj, scikit-learn, matplotlib and biopython. pyproject.toml provided for convenient install, for example using uv package manager.
+
+```
+git clone https://github.com/lehuray-k/PH_domain_predict_GATv2.git
+cd PH_domain_predict_GATv2
+uv sync
+```
 
 Scripts have been tested on macOS (with M2 processor), Debian 12 and centOS 7. We recommend using miniconda to install tensorflow 2.13.0 and keras 2.13 (they have also been successfully tested with TF 2.12.0 but earlier versions may cause issues). Prediction does not require the use of a GPU and should be computationally fast on all modern consumer processers.
 
