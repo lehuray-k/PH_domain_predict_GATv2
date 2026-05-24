@@ -14,8 +14,6 @@ from sklearn.model_selection import KFold
 from tensorflow import keras
 from tensorflow.keras import layers
 
-from protein_ML_utils import *
-
 warnings.filterwarnings("ignore")
 pd.set_option("display.max_columns", 6)
 pd.set_option("display.max_rows", 6)
@@ -25,11 +23,14 @@ pd.set_option("display.max_rows", 6)
 # BUILD THE MODEL
 class GraphAttention_v2(layers.Layer):
     """
-    Tensorflow Keras layer implementation of graph attention head using the GATv2 mechanism from the paper:
+    Tensorflow Keras layer implementation of graph attention head
+    Using the GATv2 mechanism as described in:
 
-    'How Attentive are Graph Attention Networks?', Shaked Brody, Uri Alon, Eran Yahav, arXiv preprint arXiv:2105.14491 (2021)
+    'How Attentive are Graph Attention Networks?',
+    Shaked Brody, Uri Alon, Eran Yahav,
+    arXiv preprint arXiv:2105.14491 (2021)
 
-    This implementation has been adapted to include edge features
+    This implementation has been adapted to include edge features.
 
     -------
     Mathematical summary
@@ -43,7 +44,9 @@ class GraphAttention_v2(layers.Layer):
         Let W_* represent parameters of the network
 
         Calculate the attention coefficient c_(i,j) of a node j connected to node_i
-            c_(i,j) = W_attention•LeakyReLu([W_nodes•h_i || W_neighbour-nodes•h_j || W_edges•e_(i,j)])
+            c_(i,j) = W_attention•LeakyReLu(
+                            [W_nodes•h_i || W_neighbour-nodes•h_j || W_edges•e_(i,j)]
+                            )
                 where • denotes matric multiplication and || denotes concatenation
 
         Calculate the attention score for a node j connected to node_i
@@ -51,8 +54,11 @@ class GraphAttention_v2(layers.Layer):
 
         Calculate Output at node_i
             Output_i = SIGMOID( SUM_over_all_j[a_(i,j) * (W_neighbour•h_j)] )
-                where * denotes element-wise multiplication and • denotes matrix multiplication
-                Note that the final SIGMOID non-linearity is not implemented in this class, so that the output can be concatenated and/or averaged in a multi-head strategy and then the non-linearity applied
+                * denotes element-wise multiplication
+                • denotes matrix multiplication
+                Note that the final SIGMOID non-linearity is not implemented here,
+                so that the output can be concatenated and/or averaged in a multi-head
+                strategy and then the non-linearity applied
     -------
     """
 
@@ -67,7 +73,8 @@ class GraphAttention_v2(layers.Layer):
         Parameters
         ----------
         units : int
-            Number of hidden units for node parameter matrices (edge and attention parameter matrices are scale accordingly)
+            Number of hidden units for node parameter matrices
+            (edge and attention parameter matrices are scale accordingly)
         kernel_regularizer :  tf.keras.Regularizer , optional
             Optional regularizer, by default None
         """
@@ -115,7 +122,7 @@ class GraphAttention_v2(layers.Layer):
     def call(self, inputs):
         node_states, edges, edge_features = inputs
         node_states = tf.squeeze(node_states, axis=0)
-        # If edges is a ragged tensor then convert to normal tensor. We need this because
+        # If edges is a ragged tensor then convert to normal tensor. Needed because
         # we can't index into the ragged dimension of ragged tensors
         if isinstance(edges, tf.RaggedTensor):
             edges = edges.to_tensor()
@@ -157,7 +164,8 @@ class GraphAttention_v2(layers.Layer):
         )
         attention_scores_norm = attention_scores / attention_scores_sum
 
-        # (3) Gather node states of neighbors, apply attention scores and aggregate to calculate output
+        # (3) Gather node states of neighbors,
+        # apply attention scores and aggregate to calculate output
         node_states_neighbors = tf.gather(node_states_transformed_right, edges[:, 1])
         out = tf.math.unsorted_segment_sum(
             data=node_states_neighbors * attention_scores_norm[:, tf.newaxis],
@@ -170,7 +178,8 @@ class GraphAttention_v2(layers.Layer):
 
 class MultiHeadGraphAttention_v2(layers.Layer):
     """
-    TF Keras layer which aggregates multiple graph attention heads, either by concatenation or averaging.
+    TF Keras layer which aggregates multiple graph attention heads,
+    either by concatenation or averaging.
     Performs non-linearity (ReLU) on the aggregated attention head outputs
     """
 
@@ -179,11 +188,13 @@ class MultiHeadGraphAttention_v2(layers.Layer):
         Parameters
         ----------
         units : int
-            Hidden units dimension size for node parameters (other parameters are scaled accordingly)
+            Hidden units dimension size for node parameters
+            (other parameters are scaled accordingly)
         num_heads : int, optional
             Number of graph attention heads, by default 8
         merge_type : str["concat" or "average"], optional
-            Optionally specificy method of aggregating graph attention head outputs, either "concat" or "average", by default "concat"
+            Optionally specificy method of aggregating graph attention head outputs,
+            either "concat" or "average", by default "concat"
         """
         super().__init__(**kwargs)
         self.num_heads = num_heads
@@ -208,7 +219,8 @@ class MultiHeadGraphAttention_v2(layers.Layer):
 
 
 def prepare_cross_validation_dataset(k, random_seed):
-    """Prepares k-fold cross-validation dataset from pre-processed data sampples given k and random_seed value
+    """Prepares k-fold cross-validation dataset from pre-processed data sampples,
+    given k and random_seed value
 
     Parameters
     ----------
@@ -383,12 +395,7 @@ for k in [20, 10, 5]:
         CV_set_data = prepare_cross_validation_dataset(k, random_seed)
         for CV_set in range(0, k):
             # load model for each fold
-            model_name = "%s_%sfoldCV_seed%s_fold%s" % (
-                model_name_prefix,
-                str(k),
-                str(random_seed),
-                str(CV_set),
-            )
+            model_name = f"{model_name_prefix}_{str(k)}foldCV_seed{str(random_seed)}_fold{str(CV_set)}"  # noqa: E501
             (
                 X_train,
                 X_test,
@@ -410,7 +417,8 @@ for k in [20, 10, 5]:
             MSEs = []
             ws_distances = []
             ws_distances_weights = []
-            # evaluate positivies and negatives for different thresholds (0.6 and 0.8). The positive class is predicted when prediction >= threshold
+            # Evaluate positivies and negatives for different thresholds (0.6 and 0.8).
+            # The positive class is predicted when prediction >= threshold
             true_positives = {0.6: 0, 0.8: 0}
             false_positives = {0.6: 0, 0.8: 0}
             true_negatives = {0.6: 0, 0.8: 0}
@@ -530,17 +538,15 @@ for k in [20, 10, 5]:
                     "False negative predictions (0.8)": np.mean(
                         false_negative_values[0.8]
                     ),
-                    "False negative percentile (0.8)": percentile_false_negatives_point_8,
+                    "False negative percentile (0.8)": percentile_false_negatives_point_8,  # noqa: E501
                     "PH domains in test set": ph_domain_names_test,
                 }
             )
             print(
-                "Sensitivity (0.8): %s Specificity (0.8): %s"
-                % (str(sensitivity_point8), str(specificity_point8))
+                f"Sensitivity (0.8): {str(sensitivity_point8)} Specificity (0.8): {str(specificity_point8)}"  # noqa: E501
             )
             print(
-                "Sensitivity (0.6): %s Specificity (0.6): %s"
-                % (str(sensitivity_point6), str(specificity_point6))
+                f"Sensitivity (0.6): {str(sensitivity_point6)} Specificity (0.6): {str(specificity_point6)}"  # noqa: E501
             )
 cv_metrics_df = pd.DataFrame.from_dict(CV_metrics)
 cv_metrics_df.to_csv("ph_domain_data/cross_validation/cross_validation_metrics_03.csv")

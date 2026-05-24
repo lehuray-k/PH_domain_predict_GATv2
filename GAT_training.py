@@ -1,17 +1,18 @@
 import os
 
-# disable GPU because training is faster on CPU for small dataset and lightweight model with batchsize = 1
+# disable GPU because training is faster on CPU
+# for small dataset and lightweight model with batchsize = 1
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
-import scipy
+import pickle
+import warnings
+
 import numpy as np
 import pandas as pd
-import warnings
+import scipy
+import tensorflow as tf
 from sklearn.model_selection import KFold
-from protein_ML_utils import *
-import pickle
+from tensorflow import keras
+from tensorflow.keras import layers
 
 warnings.filterwarnings("ignore")
 pd.set_option("display.max_columns", 6)
@@ -22,9 +23,11 @@ pd.set_option("display.max_rows", 6)
 # BUILD THE MODEL
 class GraphAttention_v2(layers.Layer):
     """
-    Tensorflow Keras layer implementation of graph attention head using the GATv2 mechanism from the paper:
+    Tensorflow Keras layer implementation of graph attention head
+    using the GATv2 mechanism from the paper:
 
-    'How Attentive are Graph Attention Networks?', Shaked Brody, Uri Alon, Eran Yahav, arXiv preprint arXiv:2105.14491 (2021)
+    'How Attentive are Graph Attention Networks?', Shaked Brody, Uri Alon, Eran Yahav,
+    arXiv preprint arXiv:2105.14491 (2021)
 
     This implementation has been adapted to include edge features
 
@@ -40,16 +43,22 @@ class GraphAttention_v2(layers.Layer):
         Let W_* represent parameters of the network
 
         Calculate the attention coefficient c_(i,j) of a node j connected to node_i
-            c_(i,j) = W_attention•LeakyReLu([W_nodes•h_i || W_neighbour-nodes•h_j || W_edges•e_(i,j)])
-                where • denotes matric multiplication and || denotes concatenation
+            c_(i,j) = W_attention•LeakyReLu(
+                            [W_nodes•h_i || W_neighbour-nodes•h_j || W_edges•e_(i,j)]
+                            )
+                • denotes matric multiplication
+                || denotes concatenation
 
         Calculate the attention score for a node j connected to node_i
             a_(i,j) = SOFTMAX_over_all_j( c_(i,j) )
 
         Calculate Output at node_i
             Output_i = SIGMOID( SUM_over_all_j[a_(i,j) * (W_neighbour•h_j)] )
-                where * denotes element-wise multiplication and • denotes matrix multiplication
-                Note that the final SIGMOID non-linearity is not implemented in this class, so that the output can be concatenated and/or averaged in a multi-head strategy and then the non-linearity applied
+                * denotes element-wise multiplication
+                • denotes matrix multiplication
+                Note that the final SIGMOID non-linearity is not implemented here,
+                so that the output can be concatenated and/or averaged in a multi-head
+                strategy and then the non-linearity applied
     -------
     """
 
@@ -64,7 +73,8 @@ class GraphAttention_v2(layers.Layer):
         Parameters
         ----------
         units : int
-            Number of hidden units for node parameter matrices (edge and attention parameter matrices are scale accordingly)
+            Number of hidden units for node parameter matrices
+            (edge and attention parameter matrices are scale accordingly)
         kernel_regularizer :  tf.keras.Regularizer , optional
             Optional regularizer, by default None
         """
@@ -112,11 +122,12 @@ class GraphAttention_v2(layers.Layer):
     def call(self, inputs):
         node_states, edges, edge_features = inputs
         node_states = tf.squeeze(node_states, axis=0)
-        # If edges is a ragged tensor then convert to normal tensor. We need this because we can't index into the ragged dimension of ragged tensors
-        if isinstance(edges, tf.RaggedTensor) == True:
+        # If edges is a ragged tensor then convert to normal tensor. We need this
+        #  because we can't index into the ragged dimension of ragged tensors
+        if isinstance(edges, tf.RaggedTensor):
             edges = edges.to_tensor()
         edges = tf.squeeze(edges, axis=0)
-        if isinstance(edge_features, tf.RaggedTensor) == True:
+        if isinstance(edge_features, tf.RaggedTensor):
             edge_features = edge_features.to_tensor()
         edge_features = tf.squeeze(edge_features, axis=0)
         # Linearly transform node states
@@ -153,7 +164,8 @@ class GraphAttention_v2(layers.Layer):
         )
         attention_scores_norm = attention_scores / attention_scores_sum
 
-        # (3) Gather node states of neighbors, apply attention scores and aggregate to calculate output
+        # (3) Gather node states of neighbors, apply attention scores
+        #  and aggregate to calculate output
         node_states_neighbors = tf.gather(node_states_transformed_right, edges[:, 1])
         out = tf.math.unsorted_segment_sum(
             data=node_states_neighbors * attention_scores_norm[:, tf.newaxis],
@@ -166,7 +178,8 @@ class GraphAttention_v2(layers.Layer):
 
 class MultiHeadGraphAttention_v2(layers.Layer):
     """
-    TF Keras layer which aggregates multiple graph attention heads, either by concatenation or averaging.
+    TF Keras layer which aggregates multiple graph attention heads,
+      either by concatenation or averaging.
     Performs non-linearity (ReLU) on the aggregated attention head outputs
     """
 
@@ -175,11 +188,13 @@ class MultiHeadGraphAttention_v2(layers.Layer):
         Parameters
         ----------
         units : int
-            Hidden units dimension size for node parameters (other parameters are scaled accordingly)
+            Hidden units dimension size for node parameters
+             (other parameters are scaled accordingly)
         num_heads : int, optional
             Number of graph attention heads, by default 8
         merge_type : str["concat" or "average"], optional
-            Optionally specificy method of aggregating graph attention head outputs, either "concat" or "average", by default "concat"
+            Optionally specificy method of aggregating graph attention head outputs,
+              either "concat" or "average", by default "concat"
         """
         super().__init__(**kwargs)
         self.num_heads = num_heads
@@ -204,7 +219,9 @@ class MultiHeadGraphAttention_v2(layers.Layer):
 
 
 def prepare_cross_validation_dataset(k, random_seed):
-    """Prepares k-fold cross-validation dataset from pre-processed data sampples given k and random_seed value
+    """
+    Prepares k-fold cross-validation dataset from pre-processed data samples
+    given k and random_seed value
 
     Parameters
     ----------
@@ -349,12 +366,7 @@ for k in [5, 10, 20]:
         CV_set_data = prepare_cross_validation_dataset(k, random_seed)
         for CV_set in range(0, k):
             # Train model for each fold
-            model_name = "%s_%sfoldCV_seed%s_fold%s" % (
-                model_name_prefix,
-                str(k),
-                str(random_seed),
-                str(CV_set),
-            )
+            model_name = f"{model_name_prefix}_{str(k)}foldCV_seed{str(random_seed)}_fold{str(CV_set)}"  # noqa: E501
 
             # Define model using keras functional API
             node_inputs = tf.keras.Input(shape=(None, number_of_features), batch_size=1)
@@ -400,7 +412,7 @@ for k in [5, 10, 20]:
                     restore_best_weights=True,
                     start_from_epoch=4,
                 ):
-                    super(CustomEarlyStoppingCallback, self).__init__()
+                    super().__init__()
                     self.validation_data = validation_data
                     self.patience = patience
                     self.restore_best_weights = restore_best_weights
@@ -413,7 +425,8 @@ for k in [5, 10, 20]:
 
                 def monitor_metric(self):
                     """
-                    Function for monitoring MSE, Wasserstein Distance, sensitivity, specificity, precision and F1 score
+                    Function for monitoring MSE, Wasserstein Distance, sensitivity,
+                      specificity, precision and F1 score
                     """
                     true_positives = 0
                     false_positives = 0
@@ -432,7 +445,8 @@ for k in [5, 10, 20]:
                         )
                         predict = tf.squeeze(predict, axis=[-1])
                         predict = tf.squeeze(predict, axis=[0])
-                        # normalize prediction and ground truth to obtain normalized contacts frequency
+                        # normalize prediction and ground truth
+                        #  to obtain normalized contacts frequency
                         predict = tf.divide(predict, tf.reduce_max(predict))
                         true_y = tf.divide(Y_test[index], tf.reduce_max(Y_test[index]))
                         # additional normalization for calculating WS distance
@@ -478,15 +492,7 @@ for k in [5, 10, 20]:
                     precision = true_positives / (true_positives + false_positives)
                     f1_score = 2 * sensitivity * precision / (sensitivity + precision)
                     print(
-                        "\n sensitivity: %s specificity: %s sum: %s precision: %s F1: %s MSE: %s"
-                        % (
-                            sensitivity,
-                            specificity,
-                            sensitivity + specificity,
-                            precision,
-                            f1_score,
-                            mean_mse,
-                        )
+                        f"\n sensitivity: {sensitivity} specificity: {specificity} sum: {sensitivity + specificity} precision: {precision} F1: {f1_score} MSE: {mean_mse}"  # noqa: E501
                     )
                     # Use F1 score or MSE as stopping metric
                     return f1_score
@@ -506,8 +512,7 @@ for k in [5, 10, 20]:
                     else:
                         self.wait += 1
                         print(
-                            "Early stopping patience: %s/%s"
-                            % (self.wait, str(self.patience))
+                            f"Early stopping patience: {self.wait}/{str(self.patience)}"
                         )
                         if self.wait >= self.patience:
                             self.stopped_epoch = epoch
@@ -517,7 +522,7 @@ for k in [5, 10, 20]:
                             ):
                                 self.model.set_weights(self.best_weights)
                                 print(
-                                    f"Restoring model weights from epoch {epoch - self.patience + 1}."
+                                    f"Restoring model weights from epoch {epoch - self.patience + 1}."  # noqa: E501
                                 )
                             self.model.stop_training = True
 
@@ -536,5 +541,5 @@ for k in [5, 10, 20]:
                 shuffle=True,
                 callbacks=[EarlyStopping],
             )
-            if save_models == True:
+            if save_models:
                 model.save(models_directory + model_name + ".h5")

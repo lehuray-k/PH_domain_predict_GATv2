@@ -1,12 +1,14 @@
-import numpy as np
-import warnings
-import pandas as pd
 import os
+import warnings
+
+import numpy as np
+import pandas as pd
 import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.keras import layers
 
-# disable GPU for this script as model is fast on CPU, and GPU can introduce additional compatibility issues
+# disable GPU for this script as model is fast on CPU,
+# and GPU can introduce additional compatibility issues
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 import mdtraj
 from Bio.PDB import PDBParser
@@ -16,11 +18,17 @@ from sklearn.preprocessing import OneHotEncoder
 #-----------------------------------------------------#
 INSTRUCTIONS FOR PREPARING PDB FILES
 - 'Clean up' PDB by removing all lines that do not begin with "ATOM"
-- IMPORTANT - If the structure contains multiple alternative locations "altLocs" for some atoms (indicated in column 17 of PDB file) these MUST to be modified/removed so there is only one location per atom.
-- For best performance PDB file should contain only 1 PH domain, in 1 chain and with no missing residues
-- The structure should ideally begin 1-2 residues before B1 strand and terminate 1-2 residues after C-terminal alpha helix
-- Avoid leaving LYS/ARG/HIS/GLU/ASP at C or N termini, as the loose charges at the termini may affect prediction
-- Modify 'user defined settings below' to make a list of the location of the pdb files you want to make predictions for
+- IMPORTANT - If the structure contains multiple alternative locations "altLocs"
+    for some atoms (indicated in column 17 of PDB file) these MUST
+    be modified/removed so there is only one location per atom.
+- For best performance PDB file should contain only 1 PH domain, in 1 chain
+    and with no missing residues
+- The structure should ideally begin 1-2 residues before B1 strand
+    and terminate 1-2 residues after C-terminal alpha helix
+- Avoid leaving LYS/ARG/HIS/GLU/ASP at C or N termini,
+    as the loose charges at the termini may affect prediction
+- Modify 'user defined settings below' to make a list of the location
+    of the pdb files you want to make predictions for
 #-----------------------------------------------------#
 """
 # USER DEFINED SETTINGS
@@ -32,13 +40,19 @@ files = [
     "ph_domain_data/tutorial_examples/1h6h_clean.pdb",
 ]  # list of PDB file to make predictions for
 
-model_weights_file = "ph_domain_data/models/GATv2model_2023-06-10_01_10foldCV_seed907_fold7.h5"  # location of trained model parameters
+# location of trained model parameters
+model_weights_file = (
+    "ph_domain_data/models/GATv2model_2023-06-10_01_10foldCV_seed907_fold7.h5"
+)
 
-write_new_structure_with_predicted_contacts = True  # whether or not to write a new PDB file with predicted contacts in the beta/temp factor column
-plot_predicted_contacts = True  # whether or not to make matplotlib plot of predictions
+# whether to write a new PDB file with predicted contacts in the beta/temp factor column
+write_new_structure_with_predicted_contacts = True
+
+# whether to make matplotlib plot of predictions
+plot_predicted_contacts = True
 # -----------------------------------------------------#
 
-if plot_predicted_contacts == True:
+if plot_predicted_contacts:
     import matplotlib.pyplot as plt
 
 # Define functions for extracting features from structure
@@ -97,7 +111,8 @@ def one_hot_AA_encoding(sequence):
 
 
 def beta_factor_of_c_alpha_atoms_biopandas(structure_file):
-    """Uses biopandas library to obtain the beta factor value of each amino acid alpha-carbon from a protein structure PDB file
+    """Uses biopandas library to obtain the beta factor value
+      of each amino acid alpha-carbon from a protein structure PDB file
 
     Parameters
     ----------
@@ -107,7 +122,8 @@ def beta_factor_of_c_alpha_atoms_biopandas(structure_file):
     Returns
     -------
     numpy.ndarray
-        Array of shape (n_amino_acids, 1) representing the beta factor value for each amino acid alpha-carbon
+        Array of shape (n_amino_acids, 1) representing the beta factor value
+          for each amino acid alpha-carbon
     """
     parser = PDBParser()
     structure = parser.get_structure("structure_file", structure_file)
@@ -125,7 +141,8 @@ def beta_factor_of_c_alpha_atoms_biopandas(structure_file):
 
 def shrake_rupley_solvent_accessibility(structure, mode="residue"):
     """
-    Calculates shrake-rupley solvent accessibility for each amino acid in a protein structure using MDTraj.
+    Calculates shrake-rupley solvent accessibility
+      for each amino acid in a protein structure using MDTraj.
 
     Parameters
     ----------
@@ -146,7 +163,8 @@ def shrake_rupley_solvent_accessibility(structure, mode="residue"):
 
 def DSSP_threestate_simplified(structure):
     """
-    Calculates simplified DSSP secdonary structure class labels for each amino acid in a protein structure using MDTraj, and returns this in one-hot encoded format.
+    Calculates simplified DSSP secdonary structure class labels for each amino acid
+      in a protein structure using MDTraj, and returns this in one-hot encoded format.
 
     Parameters
     ----------
@@ -156,8 +174,11 @@ def DSSP_threestate_simplified(structure):
     Returns
     -------
     numpy.ndarray
-        Array of shape (n_amino_acids, 3) representing the assigned three-state DSSP secondary structure label for each amino acid as a one-hot vector.
-        In simplified DSSP annotation helices are H, strands are E and coiled/unstructured elements are C. In this function the annotations are encoded as a one-hot vector, e.g.:
+        Array of shape (n_amino_acids, 3) representing the assigned three-state DSSP
+          secondary structure label for each amino acid as a one-hot vector.
+        In simplified DSSP annotation helices are H, strands are E and
+          coiled/unstructured elements are C. In this function the annotations
+          are encoded as a one-hot vector, e.g.:
                     H E C
             pos 1   1 0 0
             pos 2   1 0 0
@@ -178,7 +199,9 @@ def DSSP_threestate_simplified(structure):
 
 def compute_distance_matrix_and_inter_residue_unit_vectors(PDB_file):
     """
-    Computes the pairwise distance (in nanometers) and the unit vectors between all pairs of amino acids in a protein structure using MDTraj and the alpha-carbon positions.
+    Computes the pairwise distance (in nanometers) and the unit vectors between all
+      pairs of amino acids in a protein structure using MDTraj and the alpha-carbon
+      positions.
 
     Parameters
     ----------
@@ -188,15 +211,19 @@ def compute_distance_matrix_and_inter_residue_unit_vectors(PDB_file):
     Returns
     -------
     numpy.ndarray: distance_matrix
-        Array of shape (n_amino_acids, n_amino_acids) containing the pairwise distance (in nanometers) between the alpha-carbon positions of all amino acids in the protein structure.
+        Array of shape (n_amino_acids, n_amino_acids) containing the pairwise distance
+         (in nanometers) between the alpha-carbon positions of all amino acids
+         in the protein structure.
 
     numpy.ndarray: unit_vector_matrix
-        Array of shape (n_amino_acids, n_amino_acids, 3) containing the pairwise unit vectors between the alpha-carbon positions of all amino acids in the protein structure.
+        Array of shape (n_amino_acids, n_amino_acids, 3) containing the pairwise unit
+          vectors between the alpha-carbon positions of all amino acids
+          in the protein structure.
     """
     structure = mdtraj.load(PDB_file)
-    residue_indices = list(
+    residue_indices = [
         residue.index for residue in structure.topology.residues
-    )  # Convert generator to a list
+    ]  # Convert generator to a list
     num_residues = len(residue_indices)
     ca_atom_indices_dict = {}
     for residue_index in residue_indices:
@@ -218,9 +245,10 @@ def compute_distance_matrix_and_inter_residue_unit_vectors(PDB_file):
     displacement_vectors = displacement_vectors.reshape(num_residues, num_residues, 3)
     distance_matrix = np.sqrt((displacement_vectors**2).sum(axis=2))
     with warnings.catch_warnings():
-        warnings.simplefilter(
-            "ignore", RuntimeWarning
-        )  # Ignore RuntimeWarnings in the case of division by zero, which arises on diagonals of matrix. This will be handled by setting the NaNs to 0
+        # Ignore RuntimeWarnings in the case of division by zero,
+        #  which arises on diagonals of matrix.
+        # This will be handled by setting the NaNs to 0
+        warnings.simplefilter("ignore", RuntimeWarning)
         unit_vector_matrix = np.divide(
             displacement_vectors, np.expand_dims(distance_matrix, -1)
         )
@@ -231,16 +259,20 @@ def compute_distance_matrix_and_inter_residue_unit_vectors(PDB_file):
 def charge_neighbourhood_from_distance_matrix(
     sequence, distance_cutoff, distance_matrix
 ):
-    """Computes total charge within a radial distance of each amino acid, using simplified charge assignments (K, R, H = +1 charge; D, E = -1 charge).
+    """Computes total charge within a radial distance of each amino acid,
+      using simplified charge assignments (K, R, H = +1 charge; D, E = -1 charge).
 
     Parameters
     ----------
     sequence : str or array-like
         Amino acid sequence encoded using one-letter code
     distance_cutoff : float
-        Distance cutoff from the alpha carbon in nanometers, charges will be counted for all amino acids within this distance
+        Distance cutoff from the alpha carbon in nanometers, charges will be counted for
+          all amino acids within this distance
     distance_matrix : numpy.ndarray
-        Array of shape (n_amino_acids, n_amino_acids) containing the pairwise unit vectors between the alpha-carbon positions of all amino acids in the protein structure.
+        Array of shape (n_amino_acids, n_amino_acids) containing the pairwise unit
+          vectors between the alpha-carbon positions of all amino acids
+          in the protein structure.
 
     Returns
     -------
@@ -273,12 +305,26 @@ def pdb_to_pandas(pdb_file):
     Returns
     -------
     pandas.core.frame.DataFrame
-        Dataframe representation of the PDB file, where each row contains the data for a residue, with the following columns:
-            ['ATOM', 'Atom serial number', 'Atom name', 'Alternate location indicator', 'Residue name', 'Chain identifier',
-            'Residue sequence number', 'Code for insertions of residues','X coordinate', 'Y coordinate', 'Z coordinate',
-            'Occupancy', 'Temperature factor', 'Segment identifier', 'Element symbol', 'Charge']
+        Dataframe representation of the PDB file, where each row contains the data for
+          a residue, with the following columns:
+            ['ATOM',
+            'Atom serial number',
+            'Atom name',
+            'Alternate location indicator',
+            'Residue name',
+            'Chain identifier',
+            'Residue sequence number',
+            'Code for insertions of residues',
+            'X coordinate',
+            'Y coordinate',
+            'Z coordinate',
+            'Occupancy',
+            'Temperature factor',
+            'Segment identifier',
+            'Element symbol',
+            'Charge']
     """
-    file = open(pdb_file, "r")
+    file = open(pdb_file)
     lines = file.readlines()
     file.close()
     atomlines = []
@@ -345,10 +391,24 @@ def pandas_to_pdb(pandas_dataframe, pdb_file_to_write):
     Parameters
     ----------
     pandas_dataframe : pandas.core.frame.DataFrame
-        Dataframe representation of the PDB file, where each row contains the data for a residue, with the following columns:
-            ['ATOM', 'Atom serial number', 'Atom name', 'Alternate location indicator', 'Residue name', 'Chain identifier',
-            'Residue sequence number', 'Code for insertions of residues','X coordinate', 'Y coordinate', 'Z coordinate',
-            'Occupancy', 'Temperature factor', 'Segment identifier', 'Element symbol', 'Charge']
+        Dataframe representation of the PDB file, where each row contains the data for
+          a residue, with the following columns:
+            ['ATOM',
+            'Atom serial number',
+            'Atom name',
+            'Alternate location indicator',
+            'Residue name',
+            'Chain identifier',
+            'Residue sequence number',
+            'Code for insertions of residues',
+            'X coordinate',
+            'Y coordinate',
+            'Z coordinate',
+            'Occupancy',
+            'Temperature factor',
+            'Segment identifier',
+            'Element symbol',
+            'Charge']
     pdb_file_to_write : Path to PDB file to be written.
         str
     """
@@ -357,7 +417,7 @@ def pandas_to_pdb(pandas_dataframe, pdb_file_to_write):
     for row in df.iterrows():
         data = row[1]
         line = []
-        for x in range(0, 80):
+        for _ in range(0, 80):
             line.append(" ")
         line[0:4] = "{:<4s}".format(str(data["ATOM"]))
         line[7:12] = "{:>4s}".format(str(data["Atom serial number"]))
@@ -381,14 +441,15 @@ def pandas_to_pdb(pandas_dataframe, pdb_file_to_write):
 
 def modify_beta_factor_in_pdb(pdb_file, pdb_file_to_write, new_beta_factor_list):
     """
-    Reads the values of the beta-factor values of a PDB file, sets these to new values provided in new_beta_factor_list and writes a new PDB file.
+    Reads the values of the beta-factor values of a PDB file, sets these to new values
+      provided in new_beta_factor_list and writes a new PDB file.
 
     Parameters
     ----------
     pdb_file : str
         Path to pdb file to load
     pdb_file_to_write : str
-        Path for pdb file to be written, set the same as pdb_file for overwrite behaviour
+        Path for pdb file to be written, set same as pdb_file for overwrite behaviour
     new_beta_factor_list : list
         List of new beta factor values. Must be provided for the full sequence in order.
     """
@@ -406,11 +467,14 @@ def modify_beta_factor_in_pdb(pdb_file, pdb_file_to_write, new_beta_factor_list)
 
 class GraphAttention_v2(layers.Layer):
     """
-    Tensorflow Keras layer implementation of graph attention head using the GATv2 mechanism from the paper:
+    Tensorflow Keras layer implementation of graph attention head
+      using the GATv2 mechanism from the paper:
 
-    'How Attentive are Graph Attention Networks?', Shaked Brody, Uri Alon, Eran Yahav, arXiv preprint arXiv:2105.14491 (2021)
+    'How Attentive are Graph Attention Networks?',
+    Shaked Brody, Uri Alon, Eran Yahav,
+    arXiv preprint arXiv:2105.14491 (2021)
 
-    This implementation has been adapted to include edge features
+    This implementation has been adapted to include edge features.
 
     -------
     Mathematical summary
@@ -424,16 +488,22 @@ class GraphAttention_v2(layers.Layer):
         Let W_* represent parameters of the network
 
         Calculate the attention coefficient c_(i,j) of a node j connected to node_i
-            c_(i,j) = W_attention•LeakyReLu([W_nodes•h_i || W_neighbour-nodes•h_j || W_edges•e_(i,j)])
-                where • denotes matric multiplication and || denotes concatenation
+            c_(i,j) = W_attention•LeakyReLu(
+                            [W_nodes•h_i || W_neighbour-nodes•h_j || W_edges•e_(i,j)]
+                            )
+                • denotes matric multiplication
+                || denotes concatenation
 
         Calculate the attention score for a node j connected to node_i
             a_(i,j) = SOFTMAX_over_all_j( c_(i,j) )
 
         Calculate Output at node_i
             Output_i = SIGMOID( SUM_over_all_j[a_(i,j) * (W_neighbour•h_j)] )
-                where * denotes element-wise multiplication and • denotes matrix multiplication
-                Note that the final SIGMOID non-linearity is not implemented in this class, so that the output can be concatenated and/or averaged in a multi-head strategy and then the non-linearity applied
+                * denotes element-wise multiplication
+                • denotes matrix multiplication
+                Note that the final SIGMOID non-linearity is not implemented in here,
+                  so that the output can be concatenated and/or averaged
+                  in a multi-head strategy and then the non-linearity applied
     -------
     """
 
@@ -447,7 +517,8 @@ class GraphAttention_v2(layers.Layer):
         Parameters
         ----------
         units : int
-            Number of hidden units for node parameter matrices (edge and attention parameter matrices are scale accordingly)
+            Number of hidden units for node parameter matrices
+            (edge and attention parameter matrices are scale accordingly)
         kernel_regularizer :  tf.keras.Regularizer , optional
             Optional regularizer, by default None
         """
@@ -495,11 +566,12 @@ class GraphAttention_v2(layers.Layer):
     def call(self, inputs):
         node_states, edges, edge_features = inputs
         node_states = tf.squeeze(node_states, axis=0)
-        # If edges is a ragged tensor then convert to normal tensor. We need this because we can't index into the ragged dimension of ragged tensors
-        if isinstance(edges, tf.RaggedTensor) == True:
+        # If edges is a ragged tensor then convert to normal tensor.
+        # We need this because we can't index into ragged dimension of ragged tensors
+        if isinstance(edges, tf.RaggedTensor):
             edges = edges.to_tensor()
         edges = tf.squeeze(edges, axis=0)
-        if isinstance(edge_features, tf.RaggedTensor) == True:
+        if isinstance(edge_features, tf.RaggedTensor):
             edge_features = edge_features.to_tensor()
         edge_features = tf.squeeze(edge_features, axis=0)
         # Linearly transform node states
@@ -536,7 +608,8 @@ class GraphAttention_v2(layers.Layer):
         )
         attention_scores_norm = attention_scores / attention_scores_sum
 
-        # (3) Gather node states of neighbors, apply attention scores and aggregate to calculate output
+        # (3) Gather node states of neighbors,
+        #  apply attention scores and aggregate to calculate output
         node_states_neighbors = tf.gather(node_states_transformed_right, edges[:, 1])
         out = tf.math.unsorted_segment_sum(
             data=node_states_neighbors * attention_scores_norm[:, tf.newaxis],
@@ -549,7 +622,8 @@ class GraphAttention_v2(layers.Layer):
 
 class MultiHeadGraphAttention_v2(layers.Layer):
     """
-    TF Keras layer which aggregates multiple graph attention heads, either by concatenation or averaging.
+    TF Keras layer which aggregates multiple graph attention heads,
+      either by concatenation or averaging.
     Performs non-linearity (ReLU) on the aggregated attention head outputs
     """
 
@@ -558,11 +632,13 @@ class MultiHeadGraphAttention_v2(layers.Layer):
         Parameters
         ----------
         units : int
-            Hidden units dimension size for node parameters (other parameters are scaled accordingly)
+            Hidden units dimension size for node parameters
+            (other parameters are scaled accordingly)
         num_heads : int, optional
             Number of graph attention heads, by default 8
         merge_type : str["concat" or "average"], optional
-            Optionally specificy method of aggregating graph attention head outputs, either "concat" or "average", by default "concat"
+            Optionally specificy method of aggregating graph attention head outputs,
+              either "concat" or "average", by default "concat"
         """
         super().__init__(**kwargs)
         self.num_heads = num_heads
@@ -589,7 +665,7 @@ class MultiHeadGraphAttention_v2(layers.Layer):
 # Define class for processing protein structures and making predictions
 class protein_representation:
     """
-    Class implementing the representation of the protein for the graph neural network and inference
+    Class implementing the protein representation for graph neural network and inference
     """
 
     def __init__(self, pdb_file):
@@ -612,8 +688,10 @@ class protein_representation:
 
     def preprocess_structure(self):
         """
-        Prepare protein representation for graph neural network, by calculating node features, generating edge list and calculating edge features.
-        In this implementation the protein is treated as a fully-connected graph where all amino acids are connected to each other
+        Prepare protein representation for graph neural network, by
+          calculating node features, generating edge list and calculating edge features.
+        In this implementation the protein is treated as a fully-connected graph
+          where all amino acids are connected to each other
         Node features:
             Amino acid identity (one hot encoding)
             Simplified secondary structure class (one hot encoding)
@@ -623,7 +701,7 @@ class protein_representation:
             Alpha carbon distance (nm) from amino acid i to amino acid j
             Unit vector in direction from amino acid i to amino acid j (alpha carbons)
         """
-        print("\nProcessing input features from %s\n" % (self.pdb_file))
+        print(f"\nProcessing input features from {self.pdb_file}\n")
         self.sequence = sequence_from_pdb_mdtraj(self.pdb_file)
         self.one_hot = one_hot_AA_encoding(self.sequence)
         true_beta_factor = beta_factor_of_c_alpha_atoms_biopandas(self.pdb_file)
@@ -643,7 +721,9 @@ class protein_representation:
             axis=1,
         )
         # Generate list of edges
-        # Distance cutoff for determining neighbour status. Set to 200 = essentially inf. distance; allows fully-connected graph of protein structure
+        # Distance cutoff for determining neighbour status.
+        #  Set to 200 = essentially inf. distance;
+        #  allows fully-connected graph of protein structure
         distance_cutoff = 200
         protein_neighbourhood_list = []
         for AA1 in range(0, np.shape(self.distance_matrix)[0]):
@@ -676,7 +756,8 @@ class protein_representation:
 
     def predict_phosphoinositide_contacts(self, model):
         """
-        Run trained model inference on protein representation to obtain prpedicted phosphoinositide contacts
+        Run trained model inference on protein representation
+          to obtain prpedicted phosphoinositide contacts
 
         Parameters
         ----------
@@ -688,7 +769,7 @@ class protein_representation:
         self.prediction
             Predicted phosphoinositide normalized contact frequency for each amino acid
         """
-        print("\nRunning prediction for %s\n" % (self.pdb_file))
+        print(f"\nRunning prediction for {self.pdb_file}\n")
         self.prediction = model.predict(
             [self.node_features, self.edges_list, self.edge_features]
         )
@@ -708,15 +789,16 @@ class protein_representation:
         Parameters
         ----------
         alternative_new_file_name : str, optional
-            Optional path to write new PDB file name, by default None and will write new file with _GATv2-PIPcontacts-prediction appended to input PDB file new
+            Optional path to write new PDB file name, by default None and will write
+              new file with _GATv2-PIPcontacts-prediction appended to input PDB file new
         """
-        if alternative_new_file_name == None:
+        if alternative_new_file_name is None:
             new_file_name = self.pdb_file.replace(
                 ".pdb", "_GATv2-PIPcontacts-prediction.pdb"
             )
         else:
             new_file_name = alternative_new_file_name
-        print("Writing predicted contacts to file %s" % (new_file_name))
+        print(f"Writing predicted contacts to file {new_file_name}")
         modify_beta_factor_in_pdb(
             self.pdb_file, new_file_name, self.prediction.numpy().tolist()
         )
@@ -736,10 +818,10 @@ for file in files:
 
     processed_structure.predict_phosphoinositide_contacts(model)
 
-    if write_new_structure_with_predicted_contacts == True:
+    if write_new_structure_with_predicted_contacts:
         processed_structure.output_prediction_to_new_pdb_file()
 
-    if plot_predicted_contacts == True:
+    if plot_predicted_contacts:
         print("Plotting data in matplotlib")
         fig, ax = plt.subplots()
         plt.suptitle(
