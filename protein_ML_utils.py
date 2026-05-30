@@ -1,9 +1,11 @@
 import pickle as pkl
+import warnings
 
 import MDAnalysis as mda
 import mdtraj
 import numpy as np
 import pandas as pd
+from Bio.PDB import PDBParser
 from sklearn.preprocessing import OneHotEncoder
 
 np.set_printoptions(threshold=np.inf)
@@ -89,6 +91,28 @@ def amino_acid_code_converter_three_to_one(three_letter_code):
     else:
         raise Exception(f"INVALID THREE LETTER CODE INPUT: {three_letter_code}")
 
+def sequence_from_pdb_mdtraj(structure_file):
+    """
+    Uses MDTraj to obtain amino acid sequence from PDB structure file
+
+    Parameters
+    ----------
+    structure_file : str
+        Path to PDB structure
+
+    Returns
+    -------
+    str
+        Amino acid sequence in one-letter format encoding
+    """
+    traj = mdtraj.load(structure_file)
+    # Get the topological information
+    topology = traj.topology
+    # Extract the sequence
+    sequence_mdtraj = topology.to_fasta()
+    sequence_mdtraj = "".join(sequence_mdtraj)
+    return sequence_mdtraj
+
 
 def extract_resids_sequence_and_beta_factor_from_pdb(PDB_file):
     """
@@ -141,6 +165,33 @@ def extract_resids_sequence_and_beta_factor_from_pdb(PDB_file):
     data_array = unique_rows[np.argsort(indices)]
     return data_array
 
+def beta_factor_of_c_alpha_atoms_biopandas(structure_file):
+    """Uses biopandas library to obtain the beta factor value
+      of each amino acid alpha-carbon from a protein structure PDB file
+
+    Parameters
+    ----------
+    structure_file : str
+        Path to PDB file
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of shape (n_amino_acids, 1) representing the beta factor value
+          for each amino acid alpha-carbon
+    """
+    parser = PDBParser()
+    structure = parser.get_structure("structure_file", structure_file)
+    ca_bfactor_list = []
+    for model in structure:
+        for chain in model:
+            for residue in chain:
+                if "CA" in residue:  # Ensure the residue has a Cα atom
+                    ca_atom = residue["CA"]
+                    bfactor = ca_atom.get_bfactor()
+                    ca_bfactor_list.append(bfactor)
+    ca_bfactor_array = np.array(ca_bfactor_list)
+    return ca_bfactor_array
 
 def one_hot_AA_encoding(sequence):
     """
@@ -151,10 +202,18 @@ def one_hot_AA_encoding(sequence):
     pos 3   0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0
     pos 4   0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
     etc.
-    :param sequence: STR amino acid sequence in one-letter format
-    :return: np.array one_hot_AA_encoding_matrix
+
+    Parameters
+    ----------
+    sequence : str
+        Amino acid sequence in one-letter format
+
+    Returns
+    -------
+    numpy.ndarray
+        Amino acid sequence as one-hot encoded matrix
     """
-    masterkey_sequence = "ARNDCQEGHILKMFPSTWYVARNDCQEGHILKMFPSTWYV"
+    masterkey_sequence = "ARNDCQEGHILKMFPSTWYV"
     sequence_length = len(sequence)
     matrix = np.zeros((sequence_length, 20))
     for AA in range(0, len(sequence)):
@@ -231,8 +290,8 @@ def one_hot_charge_encoding(sequence):
 
 def shrake_rupley_solvent_accessibility(structure, mode="residue"):
     """
-    Calculates shrake-rupley solvent accessibility for each amino acid
-      in a protein structure using MDTraj.
+    Calculates shrake-rupley solvent accessibility
+      for each amino acid in a protein structure using MDTraj.
 
     Parameters
     ----------
@@ -244,13 +303,11 @@ def shrake_rupley_solvent_accessibility(structure, mode="residue"):
     Returns
     -------
     numpy.ndarray
-        Array of shape (n_amino_acids, 1) representing the calculated shrake-rupley
-        solvent accessibility for each amino acid
+        Array of shape (n_amino_acids, 1) representing the calculated shrake-rupley solvent accessibility for each amino acid
     """
     structure = mdtraj.load(structure)
     shake_rupley_sa = mdtraj.shrake_rupley(structure, mode=mode).transpose()
     return shake_rupley_sa
-
 
 def DSSP_threestate_simplified(structure):
     """
@@ -287,6 +344,64 @@ def DSSP_threestate_simplified(structure):
     # fit the encoder to the reshaped array and transform it to a one-hot encoded array
     one_hot_encoded = encoder.fit_transform(arr_reshaped).toarray()
     return one_hot_encoded
+
+def compute_distance_matrix_and_inter_residue_unit_vectors(PDB_file):
+    """
+    Computes the pairwise distance (in nanometers) and the unit vectors between all
+      pairs of amino acids in a protein structure using MDTraj and the alpha-carbon
+      positions.
+
+    Parameters
+    ----------
+    PDB_file : str
+        Path to PDB file
+
+    Returns
+    -------
+    numpy.ndarray: distance_matrix
+        Array of shape (n_amino_acids, n_amino_acids) containing the pairwise distance
+         (in nanometers) between the alpha-carbon positions of all amino acids
+         in the protein structure.
+
+    numpy.ndarray: unit_vector_matrix
+        Array of shape (n_amino_acids, n_amino_acids, 3) containing the pairwise unit
+          vectors between the alpha-carbon positions of all amino acids
+          in the protein structure.
+    """
+    structure = mdtraj.load(PDB_file)
+    residue_indices = [
+        residue.index for residue in structure.topology.residues
+    ]  # Convert generator to a list
+    num_residues = len(residue_indices)
+    ca_atom_indices_dict = {}
+    for residue_index in residue_indices:
+        # Get the CA atom indices for the current residue index
+        for atom in structure.topology.atoms:
+            if atom.name == "CA":
+                if atom.residue.index == residue_index:
+                    ca_atom_indices_dict[residue_index] = atom.index
+    pairs = np.zeros((num_residues**2, 2))
+    count = 0
+    for x in ca_atom_indices_dict.keys():
+        for y in ca_atom_indices_dict.keys():
+            pairs[count, 0] = ca_atom_indices_dict[x]
+            pairs[count, 1] = ca_atom_indices_dict[y]
+            count = count + 1
+    displacement_vectors = mdtraj.compute_displacements(
+        structure, pairs, periodic=False
+    )
+    displacement_vectors = displacement_vectors.reshape(num_residues, num_residues, 3)
+    distance_matrix = np.sqrt((displacement_vectors**2).sum(axis=2))
+    with warnings.catch_warnings():
+        # Ignore RuntimeWarnings in the case of division by zero,
+        #  which arises on diagonals of matrix.
+        # This will be handled by setting the NaNs to 0
+        warnings.simplefilter("ignore", RuntimeWarning)
+        unit_vector_matrix = np.divide(
+            displacement_vectors, np.expand_dims(distance_matrix, -1)
+        )
+        unit_vector_matrix[np.isnan(unit_vector_matrix)] = 0
+    return distance_matrix, unit_vector_matrix
 
 
 def compute_residue_pairwise_distance_matrix(structure, pad_to=None):
@@ -388,63 +503,40 @@ def compute_inter_residue_unit_vectors(PDB_file, pad_to=None):
 
 
 def charge_neighbourhood_from_distance_matrix(
-    sequence, distance_cutoff, distance_matrix=None, protein_index_in_matrix=None
+    sequence, distance_cutoff, distance_matrix
 ):
     """Computes total charge within a radial distance of each amino acid,
-        using simplified charge assignments (K, R, H = +1 charge; D, E = -1 charge).
+      using simplified charge assignments (K, R, H = +1 charge; D, E = -1 charge).
 
     Parameters
     ----------
     sequence : str or array-like
         Amino acid sequence encoded using one-letter code
     distance_cutoff : float
-        Distance cutoff from the alpha carbon in nanometers,
-          charges will be counted for all amino acids within this distance
-    distance_matrix : numpy.ndarray, optional
-        Optional, by default None, in which case the distance matrix be calculated.
-        Array containing the pairwise unit vectors between the
-          alpha-carbon positions of all amino acids in the protein structure.
-    protein_index_in_matrix : int, optional
-        If provided distance matrix contains addition dimension for multiple proteins,
-         specifies the index for the protein of interest, by default None
+        Distance cutoff from the alpha carbon in nanometers, charges will be counted for
+          all amino acids within this distance
+    distance_matrix : numpy.ndarray
+        Array of shape (n_amino_acids, n_amino_acids) containing the pairwise unit
+          vectors between the alpha-carbon positions of all amino acids
+          in the protein structure.
 
     Returns
     -------
-    numpy.ndarray
-        Array of shape (n_amino_acids, 1) representing the total charge within the
-          cutoff distance neighbourhood of each amino acid.
+    _type_
+        _description_
     """
-    if distance_matrix is None:
-        distance_matrix_file = open(
-            "/home/kyle/membrane_machine_learning/DCRNN/ph_domain_data/preprocessed_data/distance_matrices_dim100xNonexNone_06Oct23.pkl",
-            "rb",
-        )  # TODO: Remove this fallback file
-        distance_matrix = pkl.load(distance_matrix_file)
-        distance_matrix_file.close()
-        if protein_index_in_matrix is None:
-            pass
-        else:
-            distance_matrix = distance_matrix[protein_index_in_matrix]
-    else:
-        distance_matrix = distance_matrix
-    neighbourhood_charge_matrix = np.zeros((len(sequence), 1))
-    for x in range(0, len(sequence)):
-        for y in range(0, len(sequence)):
-            if distance_matrix[x][y] > distance_cutoff:
-                continue
-            else:
-                if sequence[y] == "K":
-                    neighbourhood_charge_matrix[x] = neighbourhood_charge_matrix[x] + 1
-                elif sequence[y] == "R":
-                    neighbourhood_charge_matrix[x] = neighbourhood_charge_matrix[x] + 1
-                elif sequence[y] == "H":
-                    neighbourhood_charge_matrix[x] = neighbourhood_charge_matrix[x] + 1
-                elif sequence[y] == "D":
-                    neighbourhood_charge_matrix[x] = neighbourhood_charge_matrix[x] - 1
-                elif sequence[y] == "E":
-                    neighbourhood_charge_matrix[x] = neighbourhood_charge_matrix[x] - 1
-    return neighbourhood_charge_matrix
+    # Map amino acids to their charges
+    amino_acid_charge_map = {"K": 1, "R": 1, "H": 1, "D": -1, "E": -1}
 
+    # Convert sequence to corresponding charges
+    charge_sequence = np.array([amino_acid_charge_map.get(aa, 0) for aa in sequence])
+
+    # Create a boolean matrix where distances are less than the cutoff
+    within_cutoff = distance_matrix <= distance_cutoff
+    # Compute the neighbourhood charge matrix
+    neighbourhood_charge_matrix = within_cutoff.dot(charge_sequence).reshape(-1, 1)
+
+    return neighbourhood_charge_matrix
 
 def pdb_to_pandas(pdb_file):
     """
