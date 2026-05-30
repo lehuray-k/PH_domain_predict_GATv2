@@ -56,7 +56,7 @@ def prepare_cross_validation_dataset(k, random_seed):
             "rb",
         )
     )
-    global_neighbourghood_list = []
+    global_neighbourhood_list = []
 
     distance_cutoff = 200
 
@@ -67,9 +67,9 @@ def prepare_cross_validation_dataset(k, random_seed):
                 if distance_matrix[protein][AA1][AA2] > 0:
                     if distance_matrix[protein][AA1][AA2] <= distance_cutoff:
                         protein_neighbourhood_list.append([int(AA1), int(AA2)])
-        global_neighbourghood_list.append(protein_neighbourhood_list)
+        global_neighbourhood_list.append(protein_neighbourhood_list)
 
-    edges_loaded = global_neighbourghood_list
+    edges_loaded = global_neighbourhood_list
 
     edge_features = []
     for protein in range(0, 100):
